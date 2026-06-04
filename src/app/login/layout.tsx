@@ -1,7 +1,13 @@
+import { PwaStaleCacheReset } from "@/components/PwaStaleCacheReset";
 import { Suspense } from "react";
 
 export default function LoginLayout({ children }: { children: React.ReactNode }) {
-  return <Suspense fallback={<LoginFallback />}>{children}</Suspense>;
+  return (
+    <>
+      <PwaStaleCacheReset />
+      <Suspense fallback={<LoginFallback />}>{children}</Suspense>
+    </>
+  );
 }
 
 function LoginFallback() {

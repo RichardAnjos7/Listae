@@ -14,10 +14,9 @@ const OAUTH_ERRORS: Record<string, string> = {
 
 type LoginFormProps = {
   googleAuthEnabled: boolean;
-  oauthRedirectUri?: string | null;
 };
 
-export function LoginForm({ googleAuthEnabled, oauthRedirectUri }: LoginFormProps) {
+export function LoginForm({ googleAuthEnabled }: LoginFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/";
@@ -91,28 +90,6 @@ export function LoginForm({ googleAuthEnabled, oauthRedirectUri }: LoginFormProp
               <GoogleIcon />
               Continuar com Google
             </a>
-            {message?.includes("redirecionamento") && oauthRedirectUri && (
-              <p className="text-[10px] text-slate-500 break-all">
-                Cadastre no Google Cloud:{" "}
-                <code className="text-emerald-700 dark:text-emerald-400">{oauthRedirectUri}</code>
-              </p>
-            )}
-            {oauthRedirectUri && (
-              <p className="text-[10px] text-slate-400 text-center break-all">
-                URI no Google Cloud:{" "}
-                <code className="text-slate-500">{oauthRedirectUri}</code>
-              </p>
-            )}
-            <p className="text-[10px] text-slate-400 text-center">
-              <a
-                href="/api/auth/google/setup"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:text-slate-600"
-              >
-                Diagnóstico OAuth (produção)
-              </a>
-            </p>
             <div className="flex items-center gap-3">
               <div className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
               <span className="text-xs text-slate-500">ou com usuário</span>

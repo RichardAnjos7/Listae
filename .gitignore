@@ -17,11 +17,13 @@
 /.next/
 /out/
 
-# PWA (gerados no build)
+# PWA (gerados no build — não commitar)
 /public/sw.js
 /public/sw.js.map
 /public/workbox-*.js
 /public/workbox-*.js.map
+/public/swe-worker-*.js
+/public/swe-worker-*.js.map
 /public/fallback-*.js
 
 # production
