@@ -4,6 +4,8 @@ export type Profile = {
   id: string;
   name: string;
   avatar_url: string | null;
+  city?: string | null;
+  neighborhood?: string | null;
 };
 
 export type Category = {
@@ -19,6 +21,9 @@ export type Product = {
   brand: string | null;
   unit: string;
   category_id: string | null;
+  package_size?: string | null;
+  barcode?: string | null;
+  is_global?: boolean;
 };
 
 export type ShoppingListRow = {

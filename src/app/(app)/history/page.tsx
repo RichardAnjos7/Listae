@@ -15,9 +15,13 @@ export default async function HistoryPage() {
       sl.id,
       sl.name,
       sl.completed_at,
-      sm.name as supermarket_name
+      coalesce(ps.supermarket_name, sm.name) as supermarket_name,
+      ps.city,
+      coalesce(ps.list_total, 0) as snapshot_total,
+      (select count(*)::int from purchase_snapshot_items psi where psi.snapshot_id = ps.id) as item_count
     from shopping_lists sl
     left join supermarkets sm on sm.id = sl.supermarket_id
+    left join purchase_snapshots ps on ps.list_id = sl.id
     where sl.owner_id = ${userId}
       and sl.status = 'completed'
     order by sl.completed_at desc
@@ -26,18 +30,23 @@ export default async function HistoryPage() {
 
   const rows = await Promise.all(
     lists.map(async (l) => {
-      const items = await sql`
-        select quantity, unit_price from list_items where list_id = ${l.id}
-      `;
-      const total = items.reduce(
-        (s, i) => s + Number(i.quantity) * (i.unit_price != null ? Number(i.unit_price) : 0),
-        0
-      );
+      let total = Number(l.snapshot_total);
+      if (total <= 0) {
+        const items = await sql`
+          select quantity, unit_price from list_items where list_id = ${l.id}
+        `;
+        total = items.reduce(
+          (s, i) => s + Number(i.quantity) * (i.unit_price != null ? Number(i.unit_price) : 0),
+          0
+        );
+      }
       return {
         id: l.id as string,
         name: l.name as string,
         completed_at: l.completed_at as string | null,
         supermarket_name: l.supermarket_name as string | null,
+        city: l.city as string | null,
+        item_count: Number(l.item_count) || 0,
         total,
       };
     })
@@ -49,6 +58,13 @@ export default async function HistoryPage() {
       <p className="text-sm text-slate-600 dark:text-slate-400">
         Compras concluídas e totais registrados.
       </p>
+
+      <Link
+        href="/receipt"
+        className="block text-center rounded-xl border border-emerald-600 text-emerald-700 dark:text-emerald-400 font-medium py-2.5 text-sm"
+      >
+        Escanear nota fiscal (OCR)
+      </Link>
 
       <ul className="space-y-2">
         {rows.map((l) => {
@@ -67,6 +83,13 @@ export default async function HistoryPage() {
                     <p className="text-xs text-slate-500">{when}</p>
                     {l.supermarket_name && (
                       <p className="text-xs text-slate-400">{l.supermarket_name}</p>
+                    )}
+                    {(l.item_count > 0 || l.city) && (
+                      <p className="text-xs text-slate-400">
+                        {l.item_count > 0 ? `${l.item_count} itens` : ""}
+                        {l.item_count > 0 && l.city ? " · " : ""}
+                        {l.city ?? ""}
+                      </p>
                     )}
                   </div>
                   <p className="font-semibold text-emerald-700 dark:text-emerald-400 shrink-0">

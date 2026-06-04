@@ -1,4 +1,5 @@
 import { createList } from "@/lib/actions/lists";
+import { getProfile } from "@/lib/actions/profile";
 import { createSupermarket } from "@/lib/actions/supermarkets";
 import { getSessionUserId } from "@/lib/auth/session";
 import { getSql } from "@/lib/db";
@@ -10,9 +11,17 @@ export default async function NewListPage() {
   if (!userId) return null;
 
   const sql = getSql();
-  const markets = await sql`
-    select id, name from supermarkets where user_id = ${userId} order by name
-  `;
+  const [markets, chains, profile] = await Promise.all([
+    sql`
+      select sm.id, sm.name, sm.city, rc.name as chain_name
+      from supermarkets sm
+      left join retail_chains rc on rc.id = sm.chain_id
+      where sm.user_id = ${userId}
+      order by sm.name
+    `,
+    sql`select id, name from retail_chains order by name`,
+    getProfile(userId),
+  ]);
 
   async function createAction(formData: FormData) {
     "use server";
@@ -60,6 +69,8 @@ export default async function NewListPage() {
             {markets.map((m) => (
               <option key={m.id as string} value={m.id as string}>
                 {m.name as string}
+                {m.chain_name ? ` (${m.chain_name as string})` : ""}
+                {m.city ? ` · ${m.city as string}` : ""}
               </option>
             ))}
           </select>
@@ -74,13 +85,50 @@ export default async function NewListPage() {
 
       <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 p-4 space-y-3">
         <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Cadastrar supermercado</p>
+        <p className="text-xs text-slate-500">
+          Vincule à rede para alimentar a base compartilhada de preços.
+          {!profile?.city && (
+            <>
+              {" "}
+              <Link href="/profile" className="text-emerald-600 font-medium">
+                Defina sua cidade
+              </Link>{" "}
+              para preencher automaticamente.
+            </>
+          )}
+        </p>
         <form action={addMarketAction} className="space-y-2">
           <input
             name="name"
             required
-            placeholder="Nome do mercado"
+            placeholder="Nome do mercado (ex.: Nova Era Adrianópolis)"
             className="w-full rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm"
           />
+          <select
+            name="chain_id"
+            className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+          >
+            <option value="">Rede (opcional)</option>
+            {chains.map((c) => (
+              <option key={c.id as string} value={c.id as string}>
+                {c.name as string}
+              </option>
+            ))}
+          </select>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              name="city"
+              placeholder="Cidade"
+              defaultValue={profile?.city ?? ""}
+              className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm"
+            />
+            <input
+              name="neighborhood"
+              placeholder="Bairro"
+              defaultValue={profile?.neighborhood ?? ""}
+              className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm"
+            />
+          </div>
           <input
             name="address"
             placeholder="Endereço (opcional)"

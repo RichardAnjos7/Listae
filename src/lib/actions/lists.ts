@@ -3,6 +3,7 @@
 import { requireUserId } from "@/lib/auth/session";
 import { requireListAccess } from "@/lib/db/access";
 import { getSql } from "@/lib/db";
+import { recordPriceObservation } from "@/lib/prices/record-observation";
 import { revalidatePath } from "next/cache";
 import { customAlphabet } from "nanoid";
 
@@ -97,14 +98,39 @@ export async function completeList(listId: string) {
   const sql = getSql();
 
   const listRows = await sql`
-    select supermarket_id from shopping_lists where id = ${listId} limit 1
+    select sl.supermarket_id, sl.owner_id, sm.name as supermarket_name,
+           sm.store_location_id, sm.city as sm_city, sm.neighborhood as sm_neighborhood
+    from shopping_lists sl
+    left join supermarkets sm on sm.id = sl.supermarket_id
+    where sl.id = ${listId}
+    limit 1
   `;
-  const supermarketId = listRows[0]?.supermarket_id as string | null;
+  const listRow = listRows[0];
+  const supermarketId = (listRow?.supermarket_id as string | null) ?? null;
+  const supermarketName = (listRow?.supermarket_name as string | null) ?? null;
+  const storeLocationId = (listRow?.store_location_id as string | null) ?? null;
+  const smCity = (listRow?.sm_city as string | null) ?? null;
+  const smNeighborhood = (listRow?.sm_neighborhood as string | null) ?? null;
+
+  const profileRows = await sql`
+    select city, neighborhood from profiles where id = ${userId} limit 1
+  `;
+  const city = smCity ?? (profileRows[0]?.city as string | null) ?? null;
+  const neighborhood = smNeighborhood ?? (profileRows[0]?.neighborhood as string | null) ?? null;
 
   const items = await sql`
-    select product_id, unit_price, quantity
-    from list_items
-    where list_id = ${listId}
+    select
+      li.id as list_item_id,
+      li.product_id,
+      li.unit_price,
+      li.quantity,
+      p.name as product_name,
+      p.brand,
+      p.unit,
+      p.package_size
+    from list_items li
+    join products p on p.id = li.product_id
+    where li.list_id = ${listId}
   `;
 
   const now = new Date().toISOString();
@@ -114,18 +140,90 @@ export async function completeList(listId: string) {
     where id = ${listId}
   `;
 
+  let listTotal = 0;
   for (const item of items) {
-    const price = item.unit_price != null ? Number(item.unit_price) : 0;
-    if (price <= 0) continue;
+    const unitPrice = item.unit_price != null ? Number(item.unit_price) : 0;
+    const qty = Number(item.quantity);
+    if (unitPrice > 0) {
+      listTotal += qty * unitPrice;
+    }
+  }
+
+  await sql`
+    insert into purchase_snapshots (
+      list_id, owner_id, supermarket_id, supermarket_name,
+      store_location_id, city, neighborhood, completed_at, list_total
+    )
+    values (
+      ${listId},
+      ${userId},
+      ${supermarketId},
+      ${supermarketName},
+      ${storeLocationId},
+      ${city},
+      ${neighborhood},
+      ${now},
+      ${listTotal}
+    )
+    on conflict (list_id) do nothing
+  `;
+
+  const snapshotRows = await sql`
+    select id from purchase_snapshots where list_id = ${listId} limit 1
+  `;
+  const snapshotId = snapshotRows[0]?.id as string | undefined;
+
+  for (const item of items) {
+    const unitPrice = item.unit_price != null ? Number(item.unit_price) : 0;
+    const qty = Number(item.quantity);
+    if (unitPrice <= 0) continue;
+
+    const lineTotal = Math.round(qty * unitPrice * 100) / 100;
+
+    if (snapshotId) {
+      await sql`
+        insert into purchase_snapshot_items (
+          snapshot_id, product_id, product_name, brand, unit, package_size,
+          quantity, unit_price, line_total
+        )
+        values (
+          ${snapshotId},
+          ${item.product_id},
+          ${item.product_name},
+          ${item.brand},
+          ${item.unit},
+          ${item.package_size},
+          ${qty},
+          ${unitPrice},
+          ${lineTotal}
+        )
+      `;
+    }
+
     await sql`
       insert into price_history (product_id, supermarket_id, price, list_id)
-      values (${item.product_id}, ${supermarketId}, ${price}, ${listId})
+      values (${item.product_id}, ${supermarketId}, ${unitPrice}, ${listId})
     `;
+
+    await recordPriceObservation({
+      productId: item.product_id as string,
+      unitPrice,
+      quantity: qty,
+      userId,
+      listId,
+      supermarketId,
+      storeLocationId,
+      city,
+      neighborhood,
+      source: "list_complete",
+    });
   }
 
   revalidatePath("/lists");
   revalidatePath("/");
   revalidatePath("/history");
+  revalidatePath("/prices");
+  revalidatePath("/alerts");
 }
 
 export async function joinListByCodeAction(code: string) {
@@ -162,20 +260,4 @@ export async function toggleFavorite(productId: string, favorited: boolean) {
     `;
   }
   revalidatePath("/products");
-}
-
-export async function searchProducts(query: string) {
-  const q = query.trim();
-  if (q.length < 1) return [];
-
-  const sql = getSql();
-  const pattern = `%${q}%`;
-  const rows = await sql`
-    select id, name, brand, unit, category_id
-    from products
-    where name ilike ${pattern} or brand ilike ${pattern}
-    order by name
-    limit 20
-  `;
-  return rows;
 }

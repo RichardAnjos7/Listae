@@ -1,13 +1,14 @@
 "use client";
 
-import { History, LayoutGrid, ListIcon, ShoppingBasket } from "lucide-react";
+import { History, LayoutGrid, ListIcon, Search, ShoppingBasket } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const links = [
   { href: "/", label: "Início", Icon: LayoutGrid },
   { href: "/lists", label: "Listas", Icon: ListIcon },
-  { href: "/products", label: "Produtos", Icon: ShoppingBasket },
+  { href: "/prices", label: "Preços", Icon: Search },
+  { href: "/products", label: "Catálogo", Icon: ShoppingBasket },
   { href: "/history", label: "Histórico", Icon: History },
 ];
 

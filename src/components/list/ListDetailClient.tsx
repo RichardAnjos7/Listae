@@ -5,9 +5,9 @@ import {
   completeList,
   ensureShareCode,
   removeListItem,
-  searchProducts,
   updateListItem,
 } from "@/lib/actions/lists";
+import { searchCatalogProducts } from "@/lib/actions/products";
 import { useRealtimeList } from "@/lib/hooks/useRealtimeList";
 import type { ListItemRow, Product } from "@/types";
 import { formatBRL, lineTotal } from "@/lib/utils";
@@ -41,12 +41,22 @@ export function ListDetailClient({ list, initialItems }: { list: ListMeta; initi
   const [busy, setBusy] = useState(false);
 
   const searchProductsHandler = useCallback(async (q: string) => {
-    if (q.trim().length < 1) {
+    if (q.trim().length < 2) {
       setHits([]);
       return;
     }
-    const data = await searchProducts(q);
-    setHits(data as Product[]);
+    const data = await searchCatalogProducts(q);
+    setHits(
+      data.map((p) => ({
+        id: p.id,
+        name: p.name,
+        brand: p.brand,
+        unit: p.unit,
+        category_id: p.category_id,
+        package_size: p.package_size,
+        barcode: p.barcode,
+      }))
+    );
   }, []);
 
   const openShare = async () => {
@@ -120,6 +130,14 @@ export function ListDetailClient({ list, initialItems }: { list: ListMeta; initi
           Compartilhar
         </button>
         {list.status === "active" && (
+          <a
+            href="/receipt"
+            className="inline-flex items-center gap-1 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-medium px-3 py-2"
+          >
+            Nota OCR
+          </a>
+        )}
+        {list.status === "active" && (
           <button
             type="button"
             disabled={busy}
@@ -144,7 +162,7 @@ export function ListDetailClient({ list, initialItems }: { list: ListMeta; initi
       {adding && (
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-3 space-y-2 bg-white dark:bg-slate-900">
           <input
-            placeholder="Buscar produto…"
+            placeholder="Buscar no catálogo (mín. 2 letras ou EAN)…"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -152,6 +170,15 @@ export function ListDetailClient({ list, initialItems }: { list: ListMeta; initi
             }}
             className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm"
           />
+          <p className="text-[10px] text-slate-500">
+            Escolha um produto do catálogo — evita duplicatas.{" "}
+            <a href="/products" className="text-emerald-600 font-medium">
+              Ver catálogo
+            </a>
+          </p>
+          {query.trim().length > 0 && query.trim().length < 2 && (
+            <p className="text-xs text-slate-400">Digite ao menos 2 caracteres ou o código EAN.</p>
+          )}
           <ul className="max-h-48 overflow-auto text-sm space-y-1">
             {hits.map((p) => (
               <li key={p.id}>
@@ -162,6 +189,9 @@ export function ListDetailClient({ list, initialItems }: { list: ListMeta; initi
                 >
                   {p.name}
                   {p.brand && <span className="text-slate-400 text-xs ml-1">· {p.brand}</span>}
+                  {"package_size" in p && p.package_size && (
+                    <span className="text-slate-400 text-xs ml-1">· {String(p.package_size)}</span>
+                  )}
                   <span className="text-slate-400 text-xs ml-1">({p.unit})</span>
                 </button>
               </li>

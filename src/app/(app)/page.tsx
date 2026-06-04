@@ -1,3 +1,4 @@
+import { getUserNotifications } from "@/lib/actions/alerts";
 import { getSessionUserId } from "@/lib/auth/session";
 import { getSql } from "@/lib/db";
 import type { MonthlyStats, SavingsSuggestion } from "@/types";
@@ -5,20 +6,32 @@ import { formatBRL } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import Link from "next/link";
-import { ArrowDownRight, ArrowUpRight, Minus, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  Bell,
+  Minus,
+  ScanLine,
+  Sparkles,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 
 export default async function DashboardPage() {
   const userId = await getSessionUserId();
   if (!userId) return null;
 
   const sql = getSql();
-  const [mostRes, varRes, marketsRes, monthlyRes, savingsRes] = await Promise.all([
+  const [mostRes, varRes, marketsRes, monthlyRes, savingsRes, notifications] = await Promise.all([
     sql`select * from public.get_most_bought_products(${userId}::uuid, ${8})`,
     sql`select * from public.get_price_variations(${userId}::uuid, ${8})`,
     sql`select * from public.compare_supermarket_prices(${userId}::uuid)`,
     sql`select public.get_monthly_stats(${userId}::uuid) as stats`,
     sql`select public.get_savings_suggestion(${userId}::uuid) as suggestion`,
+    getUserNotifications(userId, 5),
   ]);
+
+  const unreadAlerts = notifications.filter((n) => !n.is_read);
 
   const mostBought = (mostRes ?? []) as Array<{
     product_id: string;
@@ -179,20 +192,64 @@ export default async function DashboardPage() {
       </section>
 
       <section className="rounded-2xl border border-amber-200/80 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 p-4 text-sm">
-        <p className="font-medium text-amber-900 dark:text-amber-200">Alertas</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="font-medium text-amber-900 dark:text-amber-200 flex items-center gap-2">
+            <Bell className="h-4 w-4" />
+            Alertas de preço
+          </p>
+          <Link href="/alerts" className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+            Gerenciar
+          </Link>
+        </div>
         <ul className="mt-2 space-y-1 text-amber-800 dark:text-amber-300 text-xs">
-          {variations.filter((v) => v.direction === "up" && (v.variation_pct ?? 0) > 5).length === 0 ? (
-            <li>Nenhum produto com alta forte (&gt;5%) na última leitura.</li>
+          {unreadAlerts.length > 0 ? (
+            unreadAlerts.map((n) => (
+              <li key={n.id}>
+                {n.message}
+              </li>
+            ))
+          ) : variations.filter((v) => v.direction === "up" && (v.variation_pct ?? 0) > 5).length ===
+            0 ? (
+            <li>Nenhum alerta novo. Crie em Alertas ou acompanhe variações abaixo.</li>
           ) : (
             variations
               .filter((v) => v.direction === "up" && (v.variation_pct ?? 0) > 5)
               .map((v) => (
                 <li key={v.product_id}>
-                  <strong>{v.product_name}</strong> subiu {v.variation_pct}%
+                  <strong>{v.product_name}</strong> subiu {v.variation_pct}% (suas compras)
                 </li>
               ))
           )}
         </ul>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2 flex items-center gap-2">
+          <ScanLine className="h-4 w-4 text-emerald-600" />
+          Nota fiscal
+        </h2>
+        <p className="text-xs text-slate-500 mb-3">
+          Tire foto do cupom e importe preços automaticamente (OCR).
+        </p>
+        <Link
+          href="/receipt"
+          className="block text-center rounded-xl border border-emerald-600 text-emerald-700 dark:text-emerald-400 font-medium py-2.5 text-sm"
+        >
+          Escanear nota
+        </Link>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2">Preços na cidade</h2>
+        <p className="text-xs text-slate-500 mb-3">
+          Compare produtos na base compartilhada (arroz, leite, óleo…).
+        </p>
+        <Link
+          href="/prices"
+          className="block text-center rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-medium py-2.5 text-sm hover:opacity-90 transition-opacity"
+        >
+          Buscar preços
+        </Link>
       </section>
 
       <div className="flex gap-2">
