@@ -5,12 +5,12 @@ import {
   completeList,
   ensureShareCode,
   removeListItem,
+  searchProducts,
   updateListItem,
 } from "@/lib/actions/lists";
 import { useRealtimeList } from "@/lib/hooks/useRealtimeList";
 import type { ListItemRow, Product } from "@/types";
 import { formatBRL, lineTotal } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
 import { Check, Plus, QrCode, Share2, Trash2 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useRouter } from "next/navigation";
@@ -40,18 +40,13 @@ export function ListDetailClient({ list, initialItems }: { list: ListMeta; initi
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const searchProducts = useCallback(async (q: string) => {
+  const searchProductsHandler = useCallback(async (q: string) => {
     if (q.trim().length < 1) {
       setHits([]);
       return;
     }
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("products")
-      .select("id, name, brand, unit, category_id")
-      .or(`name.ilike.%${q}%,brand.ilike.%${q}%`)
-      .limit(20);
-    setHits(data ?? []);
+    const data = await searchProducts(q);
+    setHits(data as Product[]);
   }, []);
 
   const openShare = async () => {
@@ -153,7 +148,7 @@ export function ListDetailClient({ list, initialItems }: { list: ListMeta; initi
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
-              void searchProducts(e.target.value);
+              void searchProductsHandler(e.target.value);
             }}
             className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm"
           />

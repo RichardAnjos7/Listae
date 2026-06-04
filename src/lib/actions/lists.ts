@@ -1,69 +1,60 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { requireUserId } from "@/lib/auth/session";
+import { requireListAccess } from "@/lib/db/access";
+import { getSql } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { customAlphabet } from "nanoid";
 
 const shareCode = customAlphabet("23456789ABCDEFGHJKLMNPQRSTUVWXYZ", 8);
 
 export async function createList(formData: FormData) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Não autenticado");
+  const userId = await requireUserId();
+  const sql = getSql();
 
   const name = String(formData.get("name") ?? "").trim() || "Nova lista";
   const supermarketId = String(formData.get("supermarket_id") ?? "").trim() || null;
 
-  const { data, error } = await supabase
-    .from("shopping_lists")
-    .insert({
-      name,
-      owner_id: user.id,
-      supermarket_id: supermarketId || null,
-      share_code: shareCode(),
-    })
-    .select("id")
-    .single();
+  const rows = await sql`
+    insert into shopping_lists (name, owner_id, supermarket_id, share_code)
+    values (
+      ${name},
+      ${userId},
+      ${supermarketId},
+      ${shareCode()}
+    )
+    returning id
+  `;
 
-  if (error) throw new Error(error.message);
   revalidatePath("/lists");
-  return data.id as string;
+  return rows[0].id as string;
 }
 
 export async function ensureShareCode(listId: string) {
-  const supabase = await createClient();
-  const { data: row } = await supabase
-    .from("shopping_lists")
-    .select("share_code")
-    .eq("id", listId)
-    .single();
+  const userId = await requireUserId();
+  await requireListAccess(listId, userId);
+  const sql = getSql();
 
-  if (row?.share_code) return row.share_code as string;
+  const rows = await sql`
+    select share_code from shopping_lists where id = ${listId} limit 1
+  `;
+  if (rows[0]?.share_code) return rows[0].share_code as string;
 
   const code = shareCode();
-  const { error } = await supabase.from("shopping_lists").update({ share_code: code }).eq("id", listId);
-  if (error) throw new Error(error.message);
+  await sql`update shopping_lists set share_code = ${code} where id = ${listId}`;
   revalidatePath(`/lists/${listId}`);
   return code;
 }
 
 export async function addListItem(listId: string, productId: string, quantity: number, unitPrice: number | null) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Não autenticado");
+  const userId = await requireUserId();
+  await requireListAccess(listId, userId);
+  const sql = getSql();
 
-  const { error } = await supabase.from("list_items").insert({
-    list_id: listId,
-    product_id: productId,
-    quantity,
-    unit_price: unitPrice,
-    added_by: user.id,
-  });
-  if (error) throw new Error(error.message);
+  await sql`
+    insert into list_items (list_id, product_id, quantity, unit_price, added_by)
+    values (${listId}, ${productId}, ${quantity}, ${unitPrice}, ${userId})
+  `;
   revalidatePath(`/lists/${listId}`);
 }
 
@@ -72,67 +63,64 @@ export async function updateListItem(
   listId: string,
   patch: { quantity?: number; unit_price?: number | null; checked?: boolean }
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Não autenticado");
+  const userId = await requireUserId();
+  await requireListAccess(listId, userId);
+  const sql = getSql();
 
-  const body: Record<string, unknown> = { ...patch };
-  if (patch.checked === true) body.checked_by = user.id;
-  if (patch.checked === false) body.checked_by = null;
+  if (patch.quantity !== undefined) {
+    await sql`update list_items set quantity = ${patch.quantity} where id = ${itemId}`;
+  }
+  if (patch.unit_price !== undefined) {
+    await sql`update list_items set unit_price = ${patch.unit_price} where id = ${itemId}`;
+  }
+  if (patch.checked === true) {
+    await sql`update list_items set checked = true, checked_by = ${userId} where id = ${itemId}`;
+  }
+  if (patch.checked === false) {
+    await sql`update list_items set checked = false, checked_by = null where id = ${itemId}`;
+  }
 
-  const { error } = await supabase.from("list_items").update(body).eq("id", itemId);
-  if (error) throw new Error(error.message);
   revalidatePath(`/lists/${listId}`);
 }
 
 export async function removeListItem(itemId: string, listId: string) {
-  const supabase = await createClient();
-  const { error } = await supabase.from("list_items").delete().eq("id", itemId);
-  if (error) throw new Error(error.message);
+  const userId = await requireUserId();
+  await requireListAccess(listId, userId);
+  const sql = getSql();
+  await sql`delete from list_items where id = ${itemId}`;
   revalidatePath(`/lists/${listId}`);
 }
 
 export async function completeList(listId: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Não autenticado");
+  const userId = await requireUserId();
+  await requireListAccess(listId, userId);
+  const sql = getSql();
 
-  const { data: list } = await supabase
-    .from("shopping_lists")
-    .select("supermarket_id")
-    .eq("id", listId)
-    .single();
+  const listRows = await sql`
+    select supermarket_id from shopping_lists where id = ${listId} limit 1
+  `;
+  const supermarketId = listRows[0]?.supermarket_id as string | null;
 
-  const { data: items } = await supabase
-    .from("list_items")
-    .select("product_id, unit_price, quantity")
-    .eq("list_id", listId);
+  const items = await sql`
+    select product_id, unit_price, quantity
+    from list_items
+    where list_id = ${listId}
+  `;
 
   const now = new Date().toISOString();
-  const { error: upErr } = await supabase
-    .from("shopping_lists")
-    .update({ status: "completed", completed_at: now })
-    .eq("id", listId);
+  await sql`
+    update shopping_lists
+    set status = 'completed', completed_at = ${now}
+    where id = ${listId}
+  `;
 
-  if (upErr) throw new Error(upErr.message);
-
-  const rows =
-    items?.map((i) => ({
-      product_id: i.product_id,
-      supermarket_id: list?.supermarket_id ?? null,
-      price: i.unit_price != null ? Number(i.unit_price) : 0,
-      list_id: listId,
-    })) ?? [];
-
-  if (rows.length > 0) {
-    const { error: phErr } = await supabase.from("price_history").insert(
-      rows.filter((r) => r.price > 0)
-    );
-    if (phErr) throw new Error(phErr.message);
+  for (const item of items) {
+    const price = item.unit_price != null ? Number(item.unit_price) : 0;
+    if (price <= 0) continue;
+    await sql`
+      insert into price_history (product_id, supermarket_id, price, list_id)
+      values (${item.product_id}, ${supermarketId}, ${price}, ${listId})
+    `;
   }
 
   revalidatePath("/lists");
@@ -141,11 +129,13 @@ export async function completeList(listId: string) {
 }
 
 export async function joinListByCodeAction(code: string) {
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("join_list_by_code", { code: code.trim() });
-  if (error) throw new Error(error.message);
+  const userId = await requireUserId();
+  const sql = getSql();
+  const rows = await sql`
+    select public.join_list_by_code(${code.trim()}, ${userId}::uuid) as list_id
+  `;
   revalidatePath("/lists");
-  return data as string;
+  return rows[0].list_id as string;
 }
 
 export async function toggleFavoriteFromForm(formData: FormData) {
@@ -156,22 +146,36 @@ export async function toggleFavoriteFromForm(formData: FormData) {
 }
 
 export async function toggleFavorite(productId: string, favorited: boolean) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Não autenticado");
+  const userId = await requireUserId();
+  const sql = getSql();
 
   if (favorited) {
-    const { error } = await supabase.from("favorite_products").insert({ user_id: user.id, product_id: productId });
-    if (error && !error.message.includes("duplicate")) throw new Error(error.message);
+    await sql`
+      insert into favorite_products (user_id, product_id)
+      values (${userId}, ${productId})
+      on conflict do nothing
+    `;
   } else {
-    const { error } = await supabase
-      .from("favorite_products")
-      .delete()
-      .eq("user_id", user.id)
-      .eq("product_id", productId);
-    if (error) throw new Error(error.message);
+    await sql`
+      delete from favorite_products
+      where user_id = ${userId} and product_id = ${productId}
+    `;
   }
   revalidatePath("/products");
+}
+
+export async function searchProducts(query: string) {
+  const q = query.trim();
+  if (q.length < 1) return [];
+
+  const sql = getSql();
+  const pattern = `%${q}%`;
+  const rows = await sql`
+    select id, name, brand, unit, category_id
+    from products
+    where name ilike ${pattern} or brand ilike ${pattern}
+    order by name
+    limit 20
+  `;
+  return rows;
 }

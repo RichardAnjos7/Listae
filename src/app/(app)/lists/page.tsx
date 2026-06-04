@@ -1,23 +1,29 @@
-import { createClient } from "@/lib/supabase/server";
+import { getSessionUserId } from "@/lib/auth/session";
+import { getSql } from "@/lib/db";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
 export default async function ListsPage() {
-  const supabase = await createClient();
-  const { data: lists } = await supabase
-    .from("shopping_lists")
-    .select(
-      `
-      id,
-      name,
-      status,
-      updated_at,
-      supermarket:supermarkets(name)
-    `
-    )
-    .order("updated_at", { ascending: false });
+  const userId = await getSessionUserId();
+  if (!userId) return null;
 
-  const rows = lists ?? [];
+  const sql = getSql();
+  const rows = await sql`
+    select
+      sl.id,
+      sl.name,
+      sl.status,
+      sl.updated_at,
+      sm.name as supermarket_name
+    from shopping_lists sl
+    left join supermarkets sm on sm.id = sl.supermarket_id
+    where sl.owner_id = ${userId}
+       or exists (
+         select 1 from list_collaborators lc
+         where lc.list_id = sl.id and lc.user_id = ${userId}
+       )
+    order by sl.updated_at desc
+  `;
 
   return (
     <div className="space-y-4 pb-4">
@@ -33,36 +39,34 @@ export default async function ListsPage() {
       </div>
 
       <ul className="space-y-2">
-        {rows.map((l) => {
-          const smRaw = l.supermarket as unknown;
-          const sm = (Array.isArray(smRaw) ? smRaw[0] : smRaw) as { name: string } | null | undefined;
-          return (
-            <li key={l.id}>
-              <Link
-                href={`/lists/${l.id}`}
-                className="block rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm active:scale-[0.99] transition-transform"
-              >
-                <div className="flex justify-between gap-2">
-                  <div>
-                    <p className="font-medium text-slate-900 dark:text-white">{l.name}</p>
-                    {sm?.name && <p className="text-xs text-slate-500">{sm.name}</p>}
-                  </div>
-                  <span
-                    className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 h-fit ${
-                      l.status === "active"
-                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
-                        : l.status === "completed"
-                          ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-                          : "bg-slate-100 text-slate-500"
-                    }`}
-                  >
-                    {l.status === "active" ? "Ativa" : l.status === "completed" ? "Concluída" : l.status}
-                  </span>
+        {rows.map((l) => (
+          <li key={l.id as string}>
+            <Link
+              href={`/lists/${l.id}`}
+              className="block rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm active:scale-[0.99] transition-transform"
+            >
+              <div className="flex justify-between gap-2">
+                <div>
+                  <p className="font-medium text-slate-900 dark:text-white">{l.name as string}</p>
+                  {l.supermarket_name && (
+                    <p className="text-xs text-slate-500">{l.supermarket_name as string}</p>
+                  )}
                 </div>
-              </Link>
-            </li>
-          );
-        })}
+                <span
+                  className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 h-fit ${
+                    l.status === "active"
+                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
+                      : l.status === "completed"
+                        ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                        : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  {l.status === "active" ? "Ativa" : l.status === "completed" ? "Concluída" : (l.status as string)}
+                </span>
+              </div>
+            </Link>
+          </li>
+        ))}
       </ul>
 
       {rows.length === 0 && (

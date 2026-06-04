@@ -1,32 +1,31 @@
-import { createClient } from "@/lib/supabase/server";
+import { getSessionUserId } from "@/lib/auth/session";
+import { getSql } from "@/lib/db";
 import { toggleFavoriteFromForm } from "@/lib/actions/lists";
 import { Star } from "lucide-react";
 
 export default async function ProductsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const userId = await getSessionUserId();
+  if (!userId) return null;
 
-  const { data: products } = await supabase
-    .from("products")
-    .select(
-      `
-      id,
-      name,
-      brand,
-      unit,
-      category:categories(name, icon)
-    `
-    )
-    .order("name")
-    .limit(200);
+  const sql = getSql();
+  const products = await sql`
+    select
+      p.id,
+      p.name,
+      p.brand,
+      p.unit,
+      c.name as category_name,
+      c.icon as category_icon
+    from products p
+    left join categories c on c.id = p.category_id
+    order by p.name
+    limit 200
+  `;
 
-  const { data: favRows } = user
-    ? await supabase.from("favorite_products").select("product_id").eq("user_id", user.id)
-    : { data: [] as { product_id: string }[] };
-
-  const favSet = new Set((favRows ?? []).map((f) => f.product_id));
+  const favRows = await sql`
+    select product_id from favorite_products where user_id = ${userId}
+  `;
+  const favSet = new Set(favRows.map((f) => f.product_id as string));
 
   return (
     <div className="space-y-4 pb-4">
@@ -36,27 +35,22 @@ export default async function ProductsPage() {
       </p>
 
       <ul className="space-y-2">
-        {(products ?? []).map((p) => {
-          const catRaw = p.category as unknown;
-          const cat = (Array.isArray(catRaw) ? catRaw[0] : catRaw) as {
-            name: string;
-            icon: string | null;
-          } | null;
-          const fav = favSet.has(p.id);
+        {products.map((p) => {
+          const fav = favSet.has(p.id as string);
           return (
             <li
-              key={p.id}
+              key={p.id as string}
               className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-sm"
             >
               <div className="min-w-0">
-                <p className="font-medium text-slate-900 dark:text-white truncate">{p.name}</p>
+                <p className="font-medium text-slate-900 dark:text-white truncate">{p.name as string}</p>
                 <p className="text-xs text-slate-500 truncate">
-                  {cat?.icon} {cat?.name}
-                  {p.brand && ` · ${p.brand}`} · {p.unit}
+                  {p.category_icon as string} {p.category_name as string}
+                  {p.brand && ` · ${p.brand as string}`} · {p.unit as string}
                 </p>
               </div>
               <form action={toggleFavoriteFromForm}>
-                <input type="hidden" name="product_id" value={p.id} />
+                <input type="hidden" name="product_id" value={p.id as string} />
                 <input type="hidden" name="next_favorited" value={fav ? "0" : "1"} />
                 <button
                   type="submit"
@@ -71,9 +65,9 @@ export default async function ProductsPage() {
         })}
       </ul>
 
-      {(products ?? []).length === 0 && (
+      {products.length === 0 && (
         <p className="text-sm text-slate-500 text-center py-12">
-          Nenhum produto. Rode o seed SQL no Supabase (veja README).
+          Nenhum produto. Rode o seed SQL no Neon (veja neon/seed.sql).
         </p>
       )}
     </div>

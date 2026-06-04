@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { getSessionUserId } from "@/lib/auth/session";
+import { getSql } from "@/lib/db";
 import type { MonthlyStats, SavingsSuggestion } from "@/types";
 import { formatBRL } from "@/lib/utils";
 import { format } from "date-fns";
@@ -7,21 +8,41 @@ import Link from "next/link";
 import { ArrowDownRight, ArrowUpRight, Minus, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
 
 export default async function DashboardPage() {
-  const supabase = await createClient();
+  const userId = await getSessionUserId();
+  if (!userId) return null;
 
+  const sql = getSql();
   const [mostRes, varRes, marketsRes, monthlyRes, savingsRes] = await Promise.all([
-    supabase.rpc("get_most_bought_products", { p_limit: 8 }),
-    supabase.rpc("get_price_variations", { p_limit: 8 }),
-    supabase.rpc("compare_supermarket_prices"),
-    supabase.rpc("get_monthly_stats"),
-    supabase.rpc("get_savings_suggestion"),
+    sql`select * from public.get_most_bought_products(${userId}::uuid, ${8})`,
+    sql`select * from public.get_price_variations(${userId}::uuid, ${8})`,
+    sql`select * from public.compare_supermarket_prices(${userId}::uuid)`,
+    sql`select public.get_monthly_stats(${userId}::uuid) as stats`,
+    sql`select public.get_savings_suggestion(${userId}::uuid) as suggestion`,
   ]);
 
-  const mostBought = mostRes.data ?? [];
-  const variations = varRes.data ?? [];
-  const markets = marketsRes.data ?? [];
-  const monthly = (monthlyRes.data ?? null) as MonthlyStats | null;
-  const savings = (savingsRes.data ?? { has_suggestion: false }) as SavingsSuggestion;
+  const mostBought = (mostRes ?? []) as Array<{
+    product_id: string;
+    product_name: string;
+    times_bought: number;
+    last_price: number | null;
+  }>;
+  const variations = (varRes ?? []) as Array<{
+    product_id: string;
+    product_name: string;
+    variation_pct: number | null;
+    direction: string;
+    current_price: number;
+    previous_price: number;
+  }>;
+  const markets = (marketsRes ?? []) as Array<{
+    supermarket_id: string;
+    supermarket_name: string;
+    trip_count: number;
+    avg_total: number;
+    last_total: number | null;
+  }>;
+  const monthly = (monthlyRes[0]?.stats ?? null) as MonthlyStats | null;
+  const savings = (savingsRes[0]?.suggestion ?? { has_suggestion: false }) as SavingsSuggestion;
 
   const lastAt = monthly?.last_purchase_at
     ? format(new Date(monthly.last_purchase_at), "dd MMM yyyy, HH:mm", { locale: ptBR })
@@ -85,14 +106,7 @@ export default async function DashboardPage() {
           </p>
         ) : (
           <ul className="space-y-2 text-sm">
-            {markets.map(
-              (m: {
-                supermarket_id: string;
-                supermarket_name: string;
-                trip_count: number;
-                avg_total: number;
-                last_total: number | null;
-              }) => (
+            {markets.map((m) => (
                 <li
                   key={m.supermarket_id}
                   className="flex justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2 last:border-0"
@@ -103,8 +117,7 @@ export default async function DashboardPage() {
                     <span className="block text-[10px] text-slate-400">{m.trip_count} compras</span>
                   </span>
                 </li>
-              )
-            )}
+            ))}
           </ul>
         )}
       </section>
@@ -115,15 +128,7 @@ export default async function DashboardPage() {
           <p className="text-xs text-slate-500">Sem histórico suficiente ainda.</p>
         ) : (
           <ul className="space-y-2">
-            {variations.map(
-              (v: {
-                product_id: string;
-                product_name: string;
-                variation_pct: number | null;
-                direction: string;
-                current_price: number;
-                previous_price: number;
-              }) => (
+            {variations.map((v) => (
                 <li key={v.product_id} className="flex items-center justify-between gap-2 text-sm">
                   <span className="truncate">{v.product_name}</span>
                   <span
@@ -141,8 +146,7 @@ export default async function DashboardPage() {
                     {v.variation_pct != null ? `${v.variation_pct}%` : "—"}
                   </span>
                 </li>
-              )
-            )}
+            ))}
           </ul>
         )}
       </section>
@@ -161,13 +165,7 @@ export default async function DashboardPage() {
           <p className="text-xs text-slate-500">Suas compras concluídas alimentam este ranking.</p>
         ) : (
           <ol className="list-decimal list-inside space-y-1.5 text-sm text-slate-700 dark:text-slate-300">
-            {mostBought.map(
-              (p: {
-                product_id: string;
-                product_name: string;
-                times_bought: number;
-                last_price: number | null;
-              }) => (
+            {mostBought.map((p) => (
                 <li key={p.product_id}>
                   {p.product_name}
                   <span className="text-slate-400 text-xs ml-1">
@@ -175,8 +173,7 @@ export default async function DashboardPage() {
                     {p.last_price != null ? ` · últ. ${formatBRL(Number(p.last_price))}` : ""})
                   </span>
                 </li>
-              )
-            )}
+            ))}
           </ol>
         )}
       </section>
@@ -184,15 +181,12 @@ export default async function DashboardPage() {
       <section className="rounded-2xl border border-amber-200/80 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 p-4 text-sm">
         <p className="font-medium text-amber-900 dark:text-amber-200">Alertas</p>
         <ul className="mt-2 space-y-1 text-amber-800 dark:text-amber-300 text-xs">
-          {variations.filter((v: { direction: string; variation_pct: number | null }) => v.direction === "up" && (v.variation_pct ?? 0) > 5).length === 0 ? (
+          {variations.filter((v) => v.direction === "up" && (v.variation_pct ?? 0) > 5).length === 0 ? (
             <li>Nenhum produto com alta forte (&gt;5%) na última leitura.</li>
           ) : (
             variations
-              .filter(
-                (v: { direction: string; variation_pct: number | null }) =>
-                  v.direction === "up" && (v.variation_pct ?? 0) > 5
-              )
-              .map((v: { product_id: string; product_name: string; variation_pct: number | null }) => (
+              .filter((v) => v.direction === "up" && (v.variation_pct ?? 0) > 5)
+              .map((v) => (
                 <li key={v.product_id}>
                   <strong>{v.product_name}</strong> subiu {v.variation_pct}%
                 </li>

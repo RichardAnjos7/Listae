@@ -1,15 +1,18 @@
 import { createList } from "@/lib/actions/lists";
 import { createSupermarket } from "@/lib/actions/supermarkets";
-import { createClient } from "@/lib/supabase/server";
+import { getSessionUserId } from "@/lib/auth/session";
+import { getSql } from "@/lib/db";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export default async function NewListPage() {
-  const supabase = await createClient();
-  const { data: markets } = await supabase
-    .from("supermarkets")
-    .select("id, name")
-    .order("name");
+  const userId = await getSessionUserId();
+  if (!userId) return null;
+
+  const sql = getSql();
+  const markets = await sql`
+    select id, name from supermarkets where user_id = ${userId} order by name
+  `;
 
   async function createAction(formData: FormData) {
     "use server";
@@ -54,9 +57,9 @@ export default async function NewListPage() {
             className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm"
           >
             <option value="">—</option>
-            {(markets ?? []).map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
+            {markets.map((m) => (
+              <option key={m.id as string} value={m.id as string}>
+                {m.name as string}
               </option>
             ))}
           </select>
