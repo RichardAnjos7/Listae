@@ -1,5 +1,6 @@
 import { buildGoogleAuthUrl, isGoogleAuthConfigured } from "@/lib/auth/google";
 import { OAUTH_NEXT_COOKIE, OAUTH_ORIGIN_COOKIE } from "@/lib/auth/oauth-constants";
+import { getOAuthOrigin } from "@/lib/auth/request-origin";
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
     maxAge: 60 * 10,
   });
 
-  const origin = request.nextUrl.origin;
+  const origin = getOAuthOrigin(request);
   cookieStore.set(OAUTH_ORIGIN_COOKIE, origin, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

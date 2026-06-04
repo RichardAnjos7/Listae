@@ -1,5 +1,6 @@
 import { OAUTH_NEXT_COOKIE, OAUTH_ORIGIN_COOKIE } from "@/lib/auth/oauth-constants";
 import { exchangeCodeForGoogleUser, isGoogleAuthConfigured } from "@/lib/auth/google";
+import { getAppOriginFromEnv, getOAuthOrigin } from "@/lib/auth/request-origin";
 import { findOrCreateUserFromGoogle } from "@/lib/auth/oauth-user";
 import { createSession } from "@/lib/auth/session";
 import { cookies } from "next/headers";
@@ -28,7 +29,9 @@ export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
   const next = cookieStore.get(OAUTH_NEXT_COOKIE)?.value ?? "/";
   const origin =
-    cookieStore.get(OAUTH_ORIGIN_COOKIE)?.value ?? request.nextUrl.origin;
+    cookieStore.get(OAUTH_ORIGIN_COOKIE)?.value ??
+    getAppOriginFromEnv() ??
+    getOAuthOrigin(request);
   cookieStore.delete(OAUTH_NEXT_COOKIE);
   cookieStore.delete(OAUTH_ORIGIN_COOKIE);
 
