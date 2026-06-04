@@ -29,11 +29,18 @@ O erro **400: redirect_uri_mismatch** significa que a URI de callback do app nã
 5. Para desenvolvimento local, inclua também:
    - `http://localhost:5175`
    - `http://localhost:5175/api/auth/google/callback`
-6. No servidor de produção, defina a variável de ambiente:
+6. No servidor de produção (Vercel/Render/etc.), defina:
    - `APP_URL=https://ilista.anjostecnologia.com.br`
+   - (opcional) `NEXT_PUBLIC_APP_URL` com o mesmo valor
 7. Confirme que `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` no painel do host são os **mesmos** do cliente OAuth acima.
+8. Abra `https://ilista.anjostecnologia.com.br/api/auth/google/setup` e confira se `redirect_uri_used` é **igual** à URI cadastrada no Google.
+9. Se o site abrir com `www.`, cadastre **também** `https://www.ilista.anjostecnologia.com.br/api/auth/google/callback`.
 
 Salve no Google Cloud e aguarde ~1 minuto antes de testar de novo.
+
+### Erro no console: `swe-worker ... Unexpected token '<'`
+
+O service worker PWA era bloqueado pelo middleware (retornava HTML do login em vez do `.js`). Isso foi corrigido; faça um novo deploy e, no navegador, limpe o cache / desinstale o PWA antigo antes de testar o login de novo.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

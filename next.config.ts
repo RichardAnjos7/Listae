@@ -9,6 +9,7 @@ const withPWA = withPWAInit({
   reloadOnOnline: true,
   workboxOptions: {
     disableDevLogs: true,
+    navigateFallbackDenylist: [/^\/api\//, /^\/login/],
   },
 });
 

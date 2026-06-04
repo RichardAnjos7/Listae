@@ -31,8 +31,10 @@ export async function updateSession(request: NextRequest) {
     path.endsWith(".png") ||
     path.endsWith(".svg") ||
     path.endsWith(".ico") ||
-    path.endsWith("sw.js") ||
-    path.startsWith("/workbox-");
+    path === "/sw.js" ||
+    path.startsWith("/workbox-") ||
+    path.startsWith("/swe-worker") ||
+    path.startsWith("/fallback-");
 
   if (!userId && !isPublicRoute && !isPublicAsset) {
     const redirectUrl = request.nextUrl.clone();
