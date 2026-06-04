@@ -15,7 +15,10 @@ export type CatalogProduct = {
   is_global: boolean;
 };
 
-export async function searchCatalogProducts(query: string): Promise<CatalogProduct[]> {
+export async function searchCatalogProducts(
+  query: string,
+  categoryId?: string | null
+): Promise<CatalogProduct[]> {
   const q = query.trim();
   if (q.length < 1) return [];
 
@@ -27,7 +30,7 @@ export async function searchCatalogProducts(query: string): Promise<CatalogProdu
     from public.search_catalog_products(${q}, ${userId}::uuid, ${20})
   `;
 
-  return rows.map((r) => ({
+  let results = rows.map((r) => ({
     id: r.id as string,
     name: r.name as string,
     brand: r.brand as string | null,
@@ -37,6 +40,12 @@ export async function searchCatalogProducts(query: string): Promise<CatalogProdu
     category_id: r.category_id as string | null,
     is_global: Boolean(r.is_global),
   }));
+
+  if (categoryId) {
+    results = results.filter((p) => p.category_id === categoryId);
+  }
+
+  return results;
 }
 
 export async function findProductByBarcode(barcode: string): Promise<CatalogProduct | null> {

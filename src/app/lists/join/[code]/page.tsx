@@ -1,7 +1,9 @@
-import { joinListByCodeAction } from "@/lib/actions/lists";
+import { joinListByCode } from "@/lib/list/join-by-code";
 import { getSessionUserId } from "@/lib/auth/session";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+
+export const dynamic = "force-dynamic";
 
 type PageProps = { params: Promise<{ code: string }> };
 
@@ -10,9 +12,9 @@ export default async function JoinListPage({ params }: PageProps) {
   const userId = await getSessionUserId();
 
   if (userId) {
+    let listId: string;
     try {
-      const listId = await joinListByCodeAction(code);
-      redirect(`/lists/${listId}`);
+      listId = await joinListByCode(userId, code);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Não foi possível entrar na lista.";
       return (
@@ -27,6 +29,7 @@ export default async function JoinListPage({ params }: PageProps) {
         </div>
       );
     }
+    redirect(`/lists/${listId}`);
   }
 
   return (

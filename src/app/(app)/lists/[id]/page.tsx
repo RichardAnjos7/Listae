@@ -1,4 +1,5 @@
 import { ListDetailClient } from "@/components/list/ListDetailClient";
+import { getShoppingCategories } from "@/lib/actions/list-shop";
 import { getSessionUserId } from "@/lib/auth/session";
 import { userCanAccessList } from "@/lib/db/access";
 import { getSql } from "@/lib/db";
@@ -69,6 +70,8 @@ export default async function ListDetailPage({ params }: PageProps) {
     `) as typeof basketCompare;
   }
 
+  const categories = await getShoppingCategories();
+
   return (
     <div>
       <Link href="/lists" className="text-xs text-emerald-600 font-medium">
@@ -113,6 +116,8 @@ export default async function ListDetailPage({ params }: PageProps) {
           supermarket: list.supermarket_name ? { name: list.supermarket_name as string } : null,
         }}
         initialItems={(rawItems as never[]) ?? []}
+        currentUserId={userId}
+        categories={categories}
       />
     </div>
   );

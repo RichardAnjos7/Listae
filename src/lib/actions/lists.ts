@@ -3,11 +3,48 @@
 import { requireUserId } from "@/lib/auth/session";
 import { requireListAccess } from "@/lib/db/access";
 import { getSql } from "@/lib/db";
+import { joinListByCode } from "@/lib/list/join-by-code";
+import { fetchSingleListItem, type ListItemApiRow } from "@/lib/list/queries";
+import {
+  deleteListPresenceForList,
+  fetchListPresence,
+} from "@/lib/list/presence-schema";
 import { recordPriceObservation } from "@/lib/prices/record-observation";
 import { revalidatePath } from "next/cache";
 import { customAlphabet } from "nanoid";
 
 const shareCode = customAlphabet("23456789ABCDEFGHJKLMNPQRSTUVWXYZ", 8);
+
+export async function getSuggestedUnitPrice(
+  productId: string,
+  supermarketId: string | null
+): Promise<number | null> {
+  await requireUserId();
+  const sql = getSql();
+
+  if (supermarketId) {
+    const atStore = await sql`
+      select price
+      from price_history
+      where product_id = ${productId}
+        and supermarket_id = ${supermarketId}
+      order by recorded_at desc
+      limit 1
+    `;
+    if (atStore[0]?.price != null) return Number(atStore[0].price);
+  }
+
+  const anyPrice = await sql`
+    select price
+    from price_history
+    where product_id = ${productId}
+    order by recorded_at desc
+    limit 1
+  `;
+  if (anyPrice[0]?.price != null) return Number(anyPrice[0].price);
+
+  return null;
+}
 
 export async function createList(formData: FormData) {
   const userId = await requireUserId();
@@ -47,16 +84,56 @@ export async function ensureShareCode(listId: string) {
   return code;
 }
 
-export async function addListItem(listId: string, productId: string, quantity: number, unitPrice: number | null) {
+export async function addListItem(
+  listId: string,
+  productId: string,
+  quantity: number,
+  unitPrice: number | null,
+  supermarketId?: string | null
+): Promise<{ item: ListItemApiRow; merged: boolean }> {
   const userId = await requireUserId();
   await requireListAccess(listId, userId);
   const sql = getSql();
 
-  await sql`
-    insert into list_items (list_id, product_id, quantity, unit_price, added_by)
-    values (${listId}, ${productId}, ${quantity}, ${unitPrice}, ${userId})
+  let price = unitPrice;
+  if (price == null && supermarketId !== undefined) {
+    price = await getSuggestedUnitPrice(productId, supermarketId ?? null);
+  }
+
+  const existing = await sql`
+    select id, quantity, unit_price
+    from list_items
+    where list_id = ${listId} and product_id = ${productId}
+    limit 1
   `;
+
+  let itemId: string;
+  let merged = false;
+
+  if (existing[0]) {
+    itemId = existing[0].id as string;
+    merged = true;
+    const newQty = Number(existing[0].quantity) + quantity;
+    await sql`
+      update list_items
+      set quantity = ${newQty},
+          unit_price = coalesce(unit_price, ${price}),
+          updated_at = now()
+      where id = ${itemId}
+    `;
+  } else {
+    const inserted = await sql`
+      insert into list_items (list_id, product_id, quantity, unit_price, added_by)
+      values (${listId}, ${productId}, ${quantity}, ${price}, ${userId})
+      returning id
+    `;
+    itemId = inserted[0].id as string;
+  }
+
   revalidatePath(`/lists/${listId}`);
+  const item = await fetchSingleListItem(itemId);
+  if (!item) throw new Error("Item não encontrado após adicionar");
+  return { item, merged };
 }
 
 export async function updateListItem(
@@ -90,6 +167,20 @@ export async function removeListItem(itemId: string, listId: string) {
   const sql = getSql();
   await sql`delete from list_items where id = ${itemId}`;
   revalidatePath(`/lists/${listId}`);
+}
+
+export async function getListOnlineCollaborators(listId: string) {
+  const userId = await requireUserId();
+  await requireListAccess(listId, userId);
+
+  const rows = await fetchListPresence(listId);
+
+  return rows
+    .filter((r) => (r.user_id as string) !== userId)
+    .map((r) => ({
+      userId: r.user_id as string,
+      name: r.user_name as string,
+    }));
 }
 
 export async function completeList(listId: string) {
@@ -139,6 +230,8 @@ export async function completeList(listId: string) {
     set status = 'completed', completed_at = ${now}
     where id = ${listId}
   `;
+
+  await deleteListPresenceForList(listId);
 
   let listTotal = 0;
   for (const item of items) {
@@ -228,12 +321,9 @@ export async function completeList(listId: string) {
 
 export async function joinListByCodeAction(code: string) {
   const userId = await requireUserId();
-  const sql = getSql();
-  const rows = await sql`
-    select public.join_list_by_code(${code.trim()}, ${userId}::uuid) as list_id
-  `;
+  const listId = await joinListByCode(userId, code);
   revalidatePath("/lists");
-  return rows[0].list_id as string;
+  return listId;
 }
 
 export async function toggleFavoriteFromForm(formData: FormData) {
