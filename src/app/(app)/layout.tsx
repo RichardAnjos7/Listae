@@ -24,7 +24,7 @@ export default async function AppShellLayout({ children }: { children: React.Rea
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))]">
       <OfflineBanner />
       <header className="sticky top-0 z-40 flex items-center justify-between px-4 h-12 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md">
-        <span className="font-semibold text-emerald-700 dark:text-emerald-400">iList</span>
+        <span className="font-semibold text-emerald-700 dark:text-emerald-400">Listaê</span>
         {userId && (
           <div className="flex items-center gap-3">
             <Link

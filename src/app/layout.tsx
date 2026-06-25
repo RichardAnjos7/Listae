@@ -13,14 +13,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "iList — Lista de compras inteligente",
+  title: "Listaê — Lista de compras inteligente",
   description:
     "Monte listas rápido, sincronize em tempo real e veja insights de consumo na dashboard.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "iList",
+    title: "Listaê",
   },
 };
 

@@ -29,6 +29,9 @@
 # production
 /build
 
+# import gerado (regenerável)
+neon/import-openfoodfacts.sql
+
 # misc
 .DS_Store
 *.pem

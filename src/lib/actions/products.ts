@@ -12,6 +12,8 @@ export type CatalogProduct = {
   package_size: string | null;
   barcode: string | null;
   category_id: string | null;
+  subcategory: string | null;
+  image_url: string | null;
   is_global: boolean;
 };
 
@@ -26,7 +28,7 @@ export async function searchCatalogProducts(
   const sql = getSql();
 
   const rows = await sql`
-    select id, name, brand, unit, package_size, barcode, category_id, is_global
+    select id, name, brand, unit, package_size, barcode, category_id, subcategory, image_url, is_global
     from public.search_catalog_products(${q}, ${userId}::uuid, ${20})
   `;
 
@@ -38,6 +40,8 @@ export async function searchCatalogProducts(
     package_size: r.package_size as string | null,
     barcode: r.barcode as string | null,
     category_id: r.category_id as string | null,
+    subcategory: r.subcategory as string | null,
+    image_url: r.image_url as string | null,
     is_global: Boolean(r.is_global),
   }));
 
@@ -54,7 +58,7 @@ export async function findProductByBarcode(barcode: string): Promise<CatalogProd
 
   const sql = getSql();
   const rows = await sql`
-    select id, name, brand, unit, package_size, barcode, category_id, is_global
+    select id, name, brand, unit, package_size, barcode, category_id, subcategory, image_url, is_global
     from products
     where barcode = ${code}
     limit 1
@@ -69,6 +73,8 @@ export async function findProductByBarcode(barcode: string): Promise<CatalogProd
     package_size: r.package_size as string | null,
     barcode: r.barcode as string | null,
     category_id: r.category_id as string | null,
+    subcategory: r.subcategory as string | null,
+    image_url: r.image_url as string | null,
     is_global: Boolean(r.is_global),
   };
 }

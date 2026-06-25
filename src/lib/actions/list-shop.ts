@@ -34,7 +34,7 @@ export async function getListShopSuggestions(listId: string): Promise<ShopSugges
 
   const favorites = await sql`
     select
-      p.id, p.name, p.brand, p.unit, p.package_size, p.barcode, p.category_id, p.is_global,
+      p.id, p.name, p.brand, p.unit, p.package_size, p.barcode, p.category_id, p.subcategory, p.image_url, p.is_global,
       (
         select ph.price from price_history ph
         where ph.product_id = p.id
@@ -67,6 +67,8 @@ export async function getListShopSuggestions(listId: string): Promise<ShopSugges
       package_size: r.package_size as string | null,
       barcode: r.barcode as string | null,
       category_id: r.category_id as string | null,
+      subcategory: r.subcategory as string | null,
+      image_url: r.image_url as string | null,
       is_global: Boolean(r.is_global),
       last_price: r.last_price != null ? Number(r.last_price) : null,
       source: "favorite",
@@ -85,6 +87,8 @@ export async function getListShopSuggestions(listId: string): Promise<ShopSugges
       package_size: null,
       barcode: null,
       category_id: null,
+      subcategory: null,
+      image_url: null,
       is_global: true,
       last_price: r.last_price != null ? Number(r.last_price) : null,
       source: "recent",

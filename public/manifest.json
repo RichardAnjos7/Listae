@@ -1,6 +1,6 @@
 {
-  "name": "iList — Lista de compras inteligente",
-  "short_name": "iList",
+  "name": "Listaê — Lista de compras inteligente",
+  "short_name": "Listaê",
   "description": "Listas de supermercado com sincronização em tempo real e insights de consumo.",
   "start_url": "/",
   "display": "standalone",

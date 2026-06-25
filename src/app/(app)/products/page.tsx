@@ -38,7 +38,7 @@ export default async function ProductsPage({
     query.length >= 1
       ? await sql`
           select
-            p.id, p.name, p.brand, p.unit, p.package_size, p.barcode, p.is_global,
+            p.id, p.name, p.brand, p.unit, p.package_size, p.barcode, p.subcategory, p.image_url, p.is_global,
             c.name as category_name, c.icon as category_icon
           from public.search_catalog_products(${query}, ${userId}::uuid, ${50}) sc
           join products p on p.id = sc.id
@@ -47,7 +47,7 @@ export default async function ProductsPage({
         `
       : await sql`
           select
-            p.id, p.name, p.brand, p.unit, p.package_size, p.barcode, p.is_global,
+            p.id, p.name, p.brand, p.unit, p.package_size, p.barcode, p.subcategory, p.image_url, p.is_global,
             c.name as category_name, c.icon as category_icon
           from products p
           left join categories c on c.id = p.category_id
@@ -165,7 +165,15 @@ export default async function ProductsPage({
               key={p.id as string}
               className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-sm"
             >
-              <div className="min-w-0">
+              {p.image_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={p.image_url as string}
+                  alt=""
+                  className="h-12 w-12 rounded-lg object-contain bg-slate-50 dark:bg-slate-800 shrink-0"
+                />
+              )}
+              <div className="min-w-0 flex-1">
                 <p className="font-medium text-slate-900 dark:text-white text-sm leading-snug">
                   {productLabel({
                     name: p.name as string,
@@ -177,6 +185,7 @@ export default async function ProductsPage({
                 </p>
                 <p className="text-xs text-slate-500 truncate">
                   {p.category_icon as string} {p.category_name as string}
+                  {p.subcategory ? ` · ${p.subcategory as string}` : ""}
                   {p.is_global ? " · catálogo" : " · seu cadastro"}
                 </p>
               </div>

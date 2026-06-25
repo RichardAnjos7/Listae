@@ -23,6 +23,8 @@ export type Product = {
   category_id: string | null;
   package_size?: string | null;
   barcode?: string | null;
+  subcategory?: string | null;
+  image_url?: string | null;
   is_global?: boolean;
 };
 

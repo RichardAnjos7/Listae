@@ -188,7 +188,7 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
       setShareUrl(url);
       setShareOpen(true);
       if (navigator.share) {
-        await navigator.share({ title: list.name, text: "Lista compartilhada no iList", url });
+        await navigator.share({ title: list.name, text: "Lista compartilhada no Listaê", url });
       }
     } finally {
       setBusy(false);

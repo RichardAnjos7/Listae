@@ -1,4 +1,12 @@
--- Busca de catálogo: prioriza globais, EAN exato, similaridade de nome
+-- Catálogo: imagem, subcategoria e busca atualizada
+alter table public.products add column if not exists subcategory text;
+alter table public.products add column if not exists image_url text;
+
+create index if not exists products_subcategory_idx on public.products (subcategory)
+  where subcategory is not null;
+
+drop function if exists public.search_catalog_products(text, uuid, int);
+
 create or replace function public.search_catalog_products(
   p_query text,
   p_user_id uuid default null,
@@ -12,6 +20,8 @@ returns table (
   package_size text,
   barcode text,
   category_id uuid,
+  subcategory text,
+  image_url text,
   is_global boolean,
   rank_score numeric
 )
@@ -30,6 +40,8 @@ as $$
       p.package_size,
       p.barcode,
       p.category_id,
+      p.subcategory,
+      p.image_url,
       p.is_global,
       (
         case when (select term from q) = '' then 0::numeric
@@ -50,6 +62,7 @@ as $$
       or p.name ilike '%' || (select term from q) || '%'
       or coalesce(p.brand, '') ilike '%' || (select term from q) || '%'
       or coalesce(p.package_size, '') ilike '%' || (select term from q) || '%'
+      or coalesce(p.subcategory, '') ilike '%' || (select term from q) || '%'
       or (p.barcode is not null and p.barcode = (select term from q))
     )
   )
@@ -57,49 +70,4 @@ as $$
   from filtered
   order by rank_score desc, is_global desc, name asc
   limit coalesce(p_limit, 20);
-$$;
-
--- Resolve ou cria vínculo de loja global para supermercado do usuário
-create or replace function public.resolve_store_location_for_supermarket(
-  p_chain_id uuid,
-  p_name text,
-  p_city text,
-  p_neighborhood text default null
-)
-returns uuid
-language plpgsql
-volatile
-as $$
-declare
-  loc_id uuid;
-  cname text;
-begin
-  if p_chain_id is null or p_city is null or trim(p_city) = '' then
-    return null;
-  end if;
-
-  select id into loc_id
-  from public.store_locations
-  where chain_id = p_chain_id
-    and lower(city) = lower(trim(p_city))
-    and lower(name) = lower(trim(p_name))
-  limit 1;
-
-  if loc_id is not null then
-    return loc_id;
-  end if;
-
-  select name into cname from public.retail_chains where id = p_chain_id;
-
-  insert into public.store_locations (chain_id, name, city, neighborhood)
-  values (
-    p_chain_id,
-    coalesce(nullif(trim(p_name), ''), cname, 'Loja'),
-    trim(p_city),
-    nullif(trim(coalesce(p_neighborhood, '')), '')
-  )
-  returning id into loc_id;
-
-  return loc_id;
-end;
 $$;

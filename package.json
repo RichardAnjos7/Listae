@@ -6,7 +6,11 @@
     "dev": "next dev --webpack --port 5175",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "migrate": "node scripts/run-migration.mjs",
+    "import:off": "node scripts/import-openfoodfacts.mjs --apply --limit 500",
+    "import:off:dry": "node scripts/import-openfoodfacts.mjs --dry-run --limit 500",
+    "import:off:sql": "node scripts/import-openfoodfacts.mjs --from-sql neon/import-openfoodfacts.sql"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

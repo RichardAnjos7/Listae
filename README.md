@@ -21,7 +21,7 @@ Open [http://localhost:5175](http://localhost:5175) with your browser to see the
 O erro **400: redirect_uri_mismatch** significa que a URI de callback do app não está cadastrada no Google Cloud.
 
 1. Acesse [Google Cloud Console → Credenciais](https://console.cloud.google.com/apis/credentials).
-2. Abra o cliente OAuth **Aplicativo da Web** usado pelo iLista.
+2. Abra o cliente OAuth **Aplicativo da Web** usado pelo Listaê.
 3. Em **Origens JavaScript autorizadas**, adicione:
    - `https://ilista.anjostecnologia.com.br`
 4. Em **URIs de redirecionamento autorizados**, adicione **exatamente** (sem barra no final):
