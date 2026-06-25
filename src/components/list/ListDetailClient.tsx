@@ -2,6 +2,7 @@
 
 import {
   addListItem,
+  addListItemsBatch,
   completeList,
   ensureShareCode,
   removeListItem,
@@ -18,15 +19,16 @@ import {
 import { enqueueListAction, flushListOfflineQueue } from "@/lib/hooks/useListOfflineQueue";
 import { useListPresence } from "@/lib/hooks/useListPresence";
 import { AddProductPanel } from "@/components/list/AddProductPanel";
+import { PlanListBanner } from "@/components/list/PlanListBanner";
 import { BarcodeScannerModal } from "@/components/list/BarcodeScannerModal";
 import { CompleteListDialog } from "@/components/list/CompleteListDialog";
 import { ListItemCard } from "@/components/list/ListItemCard";
 import { ListStickyTotal } from "@/components/list/ListStickyTotal";
 import { ListToasts, useListToasts } from "@/components/list/ListToasts";
 import type { Category, ListItemRow } from "@/types";
-import { Check, Plus, QrCode, Share2, ShoppingCart } from "lucide-react";
+import { Check, ClipboardList, Plus, QrCode, Share2, ShoppingCart } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Row = ListItemRow & {
@@ -54,6 +56,8 @@ const SHOP_MODE_KEY = "ilist_shop_mode";
 
 export function ListDetailClient({ list, initialItems, currentUserId, categories }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isPlanQuery = searchParams.get("plan") === "1";
   const { toasts, push: pushToast, dismiss } = useListToasts();
 
   const handleRemoteChange = useCallback(
@@ -93,6 +97,7 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
   useListPresence(list.id, list.status === "active");
 
   const [shopMode, setShopMode] = useState(false);
+  const [planMode, setPlanMode] = useState(false);
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<CatalogProduct[]>([]);
@@ -107,18 +112,24 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (isPlanQuery) {
+      setPlanMode(true);
+      setAdding(true);
+      setShopMode(false);
+      return;
+    }
     try {
       setShopMode(localStorage.getItem(SHOP_MODE_KEY) === "1");
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [isPlanQuery]);
 
   useEffect(() => {
-    if (adding) {
+    if (planMode || adding) {
       void getListShopSuggestions(list.id).then(setSuggestions).catch(() => setSuggestions([]));
     }
-  }, [adding, list.id]);
+  }, [planMode, adding, list.id]);
 
   useEffect(() => {
     const handlers = {
@@ -148,6 +159,10 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
   const toggleShopMode = () => {
     setShopMode((v) => {
       const next = !v;
+      if (next) {
+        setPlanMode(false);
+        setAdding(false);
+      }
       try {
         localStorage.setItem(SHOP_MODE_KEY, next ? "1" : "0");
       } catch {
@@ -155,6 +170,30 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
       }
       return next;
     });
+  };
+
+  const enterPlanMode = () => {
+    setPlanMode(true);
+    setAdding(true);
+    setShopMode(false);
+    try {
+      localStorage.setItem(SHOP_MODE_KEY, "0");
+    } catch {
+      /* ignore */
+    }
+    router.replace(`/lists/${list.id}?plan=1`, { scroll: false });
+  };
+
+  const finishPlanning = () => {
+    setPlanMode(false);
+    setAdding(false);
+    setShopMode(true);
+    try {
+      localStorage.setItem(SHOP_MODE_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+    router.replace(`/lists/${list.id}`, { scroll: false });
   };
 
   const searchProductsHandler = useCallback(
@@ -175,10 +214,11 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
   );
 
   useEffect(() => {
-    if (!adding) return;
+    const panelOpen = planMode || (adding && !shopMode);
+    if (!panelOpen) return;
     const t = window.setTimeout(() => void searchProductsHandler(query, categoryFilter), 250);
     return () => window.clearTimeout(t);
-  }, [query, categoryFilter, adding, searchProductsHandler]);
+  }, [query, categoryFilter, planMode, adding, shopMode, searchProductsHandler]);
 
   const openShare = async () => {
     setBusy(true);
@@ -294,8 +334,70 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
     });
   }, [items, mineOnly, listCategoryFilter, currentUserId]);
 
+  const handleAddAllSuggestions = async () => {
+    const existingIds = new Set(items.map((i) => i.product_id));
+    const toAdd = suggestions.filter((s) => !existingIds.has(s.id));
+    if (toAdd.length === 0) {
+      pushToast("Todos os sugeridos já estão na lista");
+      return;
+    }
+
+    for (const p of toAdd) {
+      applyOptimisticAdd(
+        {
+          id: p.id,
+          name: p.name,
+          brand: p.brand,
+          unit: p.unit,
+          category_id: p.category_id,
+        },
+        1,
+        p.last_price ?? null
+      );
+    }
+
+    if (!navigator.onLine) {
+      for (const p of toAdd) {
+        enqueueListAction({
+          type: "add",
+          listId: list.id,
+          payload: { productId: p.id, quantity: 1, unitPrice: p.last_price ?? null },
+        });
+      }
+      pushToast(`${toAdd.length} itens adicionados (offline)`);
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const { added } = await addListItemsBatch(
+        list.id,
+        toAdd.map((p) => ({
+          productId: p.id,
+          quantity: 1,
+          unitPrice: p.last_price ?? null,
+        })),
+        list.supermarket_id ?? null
+      );
+      pushToast(`${added} ${added === 1 ? "item adicionado" : "itens adicionados"}`);
+      await refresh();
+    } catch {
+      await refresh();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addedProductIds = useMemo(
+    () => new Set(items.map((i) => i.product_id)),
+    [items]
+  );
+
   const categoryName = (id: string | null) =>
     id ? categories.find((c) => c.id === id)?.name : null;
+
+  const showPlanPanel = planMode || (adding && !shopMode);
+  const showAddToggle = !planMode && !shopMode;
 
   return (
     <div className={`space-y-3 pb-8 ${shopMode ? "pt-0" : "pt-2"}`}>
@@ -318,15 +420,50 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
         </div>
       )}
 
+      {planMode && (
+        <PlanListBanner
+          itemCount={items.length}
+          suggestionCount={suggestions.filter((s) => !addedProductIds.has(s.id)).length}
+          busy={busy}
+          onAddSuggestions={() => void handleAddAllSuggestions()}
+          onGoToShop={finishPlanning}
+        />
+      )}
+
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setAdding((v) => !v)}
-          className="inline-flex items-center gap-1 rounded-xl bg-emerald-600 text-white text-sm font-medium px-3 py-2"
-        >
-          <Plus className="h-4 w-4" />
-          Adicionar
-        </button>
+        {showAddToggle && (
+          <button
+            type="button"
+            onClick={() => setAdding((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-xl bg-emerald-600 text-white text-sm font-medium px-3 py-2"
+          >
+            <Plus className="h-4 w-4" />
+            Adicionar
+          </button>
+        )}
+        {!planMode && !shopMode && items.length > 0 && (
+          <button
+            type="button"
+            onClick={enterPlanMode}
+            className="inline-flex items-center gap-1 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-medium px-3 py-2"
+          >
+            <ClipboardList className="h-4 w-4" />
+            Planejar
+          </button>
+        )}
+        {shopMode && (
+          <button
+            type="button"
+            onClick={() => {
+              setAdding(true);
+              setScannerOpen(false);
+            }}
+            className="inline-flex items-center gap-1 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-medium px-3 py-2"
+          >
+            <Plus className="h-4 w-4" />
+            Item esquecido
+          </button>
+        )}
         <button
           type="button"
           onClick={toggleShopMode}
@@ -337,7 +474,7 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
           }`}
         >
           <ShoppingCart className="h-4 w-4" />
-          {shopMode ? "Modo compra" : "Comprar"}
+          {shopMode ? "Sair do modo compra" : "Modo compra"}
         </button>
         <button
           type="button"
@@ -394,7 +531,7 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
         )}
       </div>
 
-      {adding && (
+      {showPlanPanel && (
         <AddProductPanel
           query={query}
           onQueryChange={setQuery}
@@ -406,6 +543,27 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
           onAdd={(p) => void handleAddProduct(p)}
           onOpenScanner={() => setScannerOpen(true)}
           busy={busy}
+          addedProductIds={addedProductIds}
+          planMode={planMode}
+        />
+      )}
+
+      {!showPlanPanel && adding && shopMode && (
+        <AddProductPanel
+          query={query}
+          onQueryChange={setQuery}
+          hits={hits}
+          suggestions={suggestions}
+          categories={categories}
+          categoryFilter={categoryFilter}
+          onCategoryFilter={setCategoryFilter}
+          onAdd={(p) => {
+            void handleAddProduct(p);
+            setAdding(false);
+          }}
+          onOpenScanner={() => setScannerOpen(true)}
+          busy={busy}
+          addedProductIds={addedProductIds}
         />
       )}
 
@@ -467,12 +625,24 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
         ))}
       </ul>
 
-      {filtered.length === 0 && (
-        <p className="text-sm text-slate-500 text-center py-8">
-          {items.length === 0
-            ? "Lista vazia. Adicione produtos ou compartilhe com quem está no supermercado."
-            : "Nenhum item neste filtro."}
-        </p>
+      {filtered.length === 0 && !showPlanPanel && (
+        <div className="text-center py-8 space-y-3">
+          <p className="text-sm text-slate-500">
+            {items.length === 0
+              ? "Monte sua lista antes de ir ao mercado."
+              : "Nenhum item neste filtro."}
+          </p>
+          {items.length === 0 && (
+            <button
+              type="button"
+              onClick={enterPlanMode}
+              className="inline-flex items-center gap-1 rounded-xl bg-emerald-600 text-white text-sm font-medium px-4 py-2"
+            >
+              <ClipboardList className="h-4 w-4" />
+              Escolher produtos
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

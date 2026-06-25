@@ -136,6 +136,55 @@ export async function addListItem(
   return { item, merged };
 }
 
+export type BatchListItemInput = {
+  productId: string;
+  quantity?: number;
+  unitPrice?: number | null;
+};
+
+export async function addListItemsBatch(
+  listId: string,
+  items: BatchListItemInput[],
+  supermarketId?: string | null
+): Promise<{ added: number; skipped: number }> {
+  if (items.length === 0) return { added: 0, skipped: 0 };
+
+  const userId = await requireUserId();
+  await requireListAccess(listId, userId);
+  const sql = getSql();
+
+  const existingRows = await sql`
+    select product_id from list_items where list_id = ${listId}
+  `;
+  const existingIds = new Set(existingRows.map((r) => r.product_id as string));
+
+  let added = 0;
+  let skipped = 0;
+
+  for (const entry of items) {
+    if (existingIds.has(entry.productId)) {
+      skipped += 1;
+      continue;
+    }
+
+    const quantity = entry.quantity ?? 1;
+    let price = entry.unitPrice ?? null;
+    if (price == null && supermarketId !== undefined) {
+      price = await getSuggestedUnitPrice(entry.productId, supermarketId ?? null);
+    }
+
+    await sql`
+      insert into list_items (list_id, product_id, quantity, unit_price, added_by)
+      values (${listId}, ${entry.productId}, ${quantity}, ${price}, ${userId})
+    `;
+    existingIds.add(entry.productId);
+    added += 1;
+  }
+
+  revalidatePath(`/lists/${listId}`);
+  return { added, skipped };
+}
+
 export async function updateListItem(
   itemId: string,
   listId: string,

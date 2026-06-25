@@ -26,7 +26,7 @@ export default async function NewListPage() {
   async function createAction(formData: FormData) {
     "use server";
     const id = await createList(formData);
-    redirect(`/lists/${id}`);
+    redirect(`/lists/${id}?plan=1`);
   }
 
   async function addMarketAction(formData: FormData) {

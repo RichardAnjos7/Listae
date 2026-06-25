@@ -4,7 +4,7 @@ import type { ShopSuggestion } from "@/lib/actions/list-shop";
 import type { CatalogProduct } from "@/lib/actions/products";
 import type { Category } from "@/types";
 import { formatBRL } from "@/lib/utils";
-import { Barcode, Star } from "lucide-react";
+import { Barcode, Check, Star } from "lucide-react";
 
 type Props = {
   query: string;
@@ -17,6 +17,8 @@ type Props = {
   onAdd: (product: CatalogProduct | ShopSuggestion) => void;
   onOpenScanner: () => void;
   busy: boolean;
+  addedProductIds?: ReadonlySet<string>;
+  planMode?: boolean;
 };
 
 export function AddProductPanel({
@@ -30,6 +32,8 @@ export function AddProductPanel({
   onAdd,
   onOpenScanner,
   busy,
+  addedProductIds,
+  planMode = false,
 }: Props) {
   const showSuggestions = query.trim().length < 2;
   const list = showSuggestions ? suggestions : hits;
@@ -92,27 +96,40 @@ export function AddProductPanel({
         <p className="text-xs text-slate-400">Digite ao menos 2 caracteres ou o EAN.</p>
       )}
 
-      <ul className="max-h-52 overflow-auto text-sm space-y-1">
-        {list.map((p) => (
+      <ul className={`${planMode ? "max-h-64" : "max-h-52"} overflow-auto text-sm space-y-1`}>
+        {list.map((p) => {
+          const inList = addedProductIds?.has(p.id) ?? false;
+          return (
           <li key={p.id}>
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || inList}
               onClick={() => onAdd(p)}
-              className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
+              className={`w-full text-left px-2 py-1.5 rounded-lg disabled:opacity-50 flex items-start gap-2 ${
+                inList
+                  ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200"
+                  : "hover:bg-slate-100 dark:hover:bg-slate-800"
+              }`}
             >
-              {p.name}
-              {p.brand && <span className="text-slate-400 text-xs ml-1">· {p.brand}</span>}
-              {"package_size" in p && p.package_size && (
-                <span className="text-slate-400 text-xs ml-1">· {String(p.package_size)}</span>
-              )}
-              <span className="text-slate-400 text-xs ml-1">({p.unit})</span>
-              {"last_price" in p && p.last_price != null && (
-                <span className="text-emerald-600 text-xs ml-1">~{formatBRL(Number(p.last_price))}</span>
-              )}
+              {inList && <Check className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600" />}
+              <span className="min-w-0 flex-1">
+                {p.name}
+                {p.brand && <span className="text-slate-400 text-xs ml-1">· {p.brand}</span>}
+                {"package_size" in p && p.package_size && (
+                  <span className="text-slate-400 text-xs ml-1">· {String(p.package_size)}</span>
+                )}
+                <span className="text-slate-400 text-xs ml-1">({p.unit})</span>
+                {"last_price" in p && p.last_price != null && (
+                  <span className="text-emerald-600 text-xs ml-1">~{formatBRL(Number(p.last_price))}</span>
+                )}
+                {inList && planMode && (
+                  <span className="text-emerald-600 text-xs ml-1">· na lista</span>
+                )}
+              </span>
             </button>
           </li>
-        ))}
+        );
+        })}
         {!showSuggestions && query.trim().length >= 2 && hits.length === 0 && (
           <li className="text-xs text-slate-400 px-2 py-2">Nenhum produto encontrado.</li>
         )}

@@ -6,6 +6,7 @@ import { getSql } from "@/lib/db";
 import { formatBRL } from "@/lib/utils";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -106,19 +107,21 @@ export default async function ListDetailPage({ params }: PageProps) {
         </section>
       )}
 
-      <ListDetailClient
-        list={{
-          id: list.id as string,
-          name: list.name as string,
-          status: list.status as string,
-          share_code: list.share_code as string | null,
-          supermarket_id: list.supermarket_id as string | null,
-          supermarket: list.supermarket_name ? { name: list.supermarket_name as string } : null,
-        }}
-        initialItems={(rawItems as never[]) ?? []}
-        currentUserId={userId}
-        categories={categories}
-      />
+      <Suspense fallback={<p className="text-sm text-slate-500 mt-4">Carregando lista…</p>}>
+        <ListDetailClient
+          list={{
+            id: list.id as string,
+            name: list.name as string,
+            status: list.status as string,
+            share_code: list.share_code as string | null,
+            supermarket_id: list.supermarket_id as string | null,
+            supermarket: list.supermarket_name ? { name: list.supermarket_name as string } : null,
+          }}
+          initialItems={(rawItems as never[]) ?? []}
+          currentUserId={userId}
+          categories={categories}
+        />
+      </Suspense>
     </div>
   );
 }
