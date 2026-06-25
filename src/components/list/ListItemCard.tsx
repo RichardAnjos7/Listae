@@ -15,6 +15,7 @@ type ItemPatch = {
 type Props = {
   item: ListItemRowExt;
   shopMode: boolean;
+  readOnly?: boolean;
   categoryIcon?: string | null;
   categoryName?: string | null;
   patchItem: (itemId: string, patch: ItemPatch) => void;
@@ -103,6 +104,7 @@ function QuantityStepper({
 export const ListItemCard = memo(function ListItemCard({
   item,
   shopMode,
+  readOnly = false,
   categoryIcon,
   categoryName,
   patchItem,
@@ -128,6 +130,38 @@ export const ListItemCard = memo(function ListItemCard({
   const sub = lineTotal(qty, unitPrice);
   const hasPrice = unitPrice != null;
   const showLastPriceHint = !hasPrice && lastPrice != null;
+
+  if (readOnly) {
+    const metaParts: string[] = [];
+    if (item.product?.brand) metaParts.push(item.product.brand);
+    metaParts.push(`${formatQty(qty)} ${item.product?.unit ?? "un"}`);
+
+    return (
+      <li className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-sm opacity-90">
+        <div className="flex items-center gap-2.5">
+          <ProductThumb
+            imageUrl={item.product?.image_url}
+            categoryIcon={categoryIcon}
+            name={item.product?.name ?? "Produto"}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="font-medium text-sm text-slate-900 dark:text-white truncate">
+              {item.product?.name ?? "Produto"}
+            </p>
+            <p className="text-xs text-slate-500 truncate">{metaParts.join(" · ")}</p>
+          </div>
+          <div className="shrink-0 text-right">
+            {hasPrice && (
+              <p className="text-[10px] text-slate-500">{formatBRL(unitPrice!)} un.</p>
+            )}
+            <p className="font-bold text-sm text-emerald-700 dark:text-emerald-400">
+              {formatBRL(sub)}
+            </p>
+          </div>
+        </div>
+      </li>
+    );
+  }
 
   if (shopMode) {
     return (

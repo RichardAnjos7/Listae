@@ -9,7 +9,15 @@ insert into public.categories (name, icon, display_order) values
   ('Bebidas', '🥤', 7),
   ('Mercearia', '🍚', 8),
   ('Frios', '🧀', 9),
-  ('Congelados', '❄️', 10)
+  ('Congelados', '❄️', 10),
+  ('Bazar', '🏠', 11),
+  ('Pet', '🐾', 12),
+  ('Infantil', '🍼', 13),
+  ('Perfumaria', '💄', 14),
+  ('Doces e Snacks', '🍫', 15),
+  ('Molhos e Temperos', '🧂', 16),
+  ('Cereais e Matinais', '🥣', 17),
+  ('Pães e Massas', '🍝', 18)
 on conflict do nothing;
 
 insert into public.products (name, brand, unit, category_id, is_global, created_by)

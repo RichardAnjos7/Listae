@@ -3,11 +3,18 @@ import { getSql } from "@/lib/db";
 import { formatBRL } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Check } from "lucide-react";
 import Link from "next/link";
 
-export default async function HistoryPage() {
+export default async function HistoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ completed?: string }>;
+}) {
   const userId = await getSessionUserId();
   if (!userId) return null;
+
+  const { completed: highlightId } = await searchParams;
 
   const sql = getSql();
   const lists = await sql`
@@ -52,12 +59,34 @@ export default async function HistoryPage() {
     })
   );
 
+  const highlighted = highlightId ? rows.find((r) => r.id === highlightId) : null;
+
   return (
     <div className="space-y-4 pb-4">
       <h1 className="text-xl font-semibold text-slate-900 dark:text-white">Histórico</h1>
       <p className="text-sm text-slate-600 dark:text-slate-400">
         Compras concluídas e totais registrados.
       </p>
+
+      {highlighted && (
+        <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/80 dark:bg-emerald-950/40 p-4 flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+            <Check className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium text-emerald-900 dark:text-emerald-100">Compra salva!</p>
+            <p className="text-sm text-emerald-800 dark:text-emerald-200 mt-0.5">
+              <strong>{highlighted.name}</strong> — {formatBRL(highlighted.total)}
+            </p>
+            <Link
+              href="/lists/new"
+              className="inline-block mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-400 underline underline-offset-2"
+            >
+              Criar nova lista →
+            </Link>
+          </div>
+        </div>
+      )}
 
       <Link
         href="/receipt"
@@ -71,11 +100,16 @@ export default async function HistoryPage() {
           const when = l.completed_at
             ? format(new Date(l.completed_at), "dd/MM/yyyy HH:mm", { locale: ptBR })
             : "—";
+          const isHighlighted = highlightId === l.id;
           return (
             <li key={l.id}>
               <Link
                 href={`/lists/${l.id}`}
-                className="block rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm"
+                className={`block rounded-2xl border bg-white dark:bg-slate-900 p-4 shadow-sm transition-colors ${
+                  isHighlighted
+                    ? "border-emerald-500 ring-2 ring-emerald-500/30"
+                    : "border-slate-200 dark:border-slate-800"
+                }`}
               >
                 <div className="flex justify-between gap-2">
                   <div>

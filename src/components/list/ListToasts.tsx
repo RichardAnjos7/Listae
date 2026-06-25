@@ -4,10 +4,13 @@ import { useEffect, useState } from "react";
 import { formatBRL } from "@/lib/utils";
 import { X } from "lucide-react";
 
+export type ListToastVariant = "default" | "success";
+
 export type ListToast = {
   id: string;
   message: string;
   amount?: number;
+  variant?: ListToastVariant;
 };
 
 export function ListToasts({ toasts, onDismiss }: { toasts: ListToast[]; onDismiss: (id: string) => void }) {
@@ -26,8 +29,16 @@ function ToastItem({ toast, onDismiss }: { toast: ListToast; onDismiss: (id: str
     return () => window.clearTimeout(id);
   }, [toast.id, onDismiss]);
 
+  const isSuccess = toast.variant === "success";
+
   return (
-    <div className="pointer-events-auto w-full max-w-sm rounded-xl bg-slate-900 text-white text-sm px-3 py-2.5 shadow-lg flex items-start gap-2 animate-in fade-in slide-in-from-top-2">
+    <div
+      className={`pointer-events-auto w-full max-w-sm rounded-xl text-sm px-3 py-2.5 shadow-lg flex items-start gap-2 ${
+        isSuccess
+          ? "bg-emerald-700 text-white border border-emerald-500/30"
+          : "bg-slate-900 text-white"
+      }`}
+    >
       <div className="flex-1 min-w-0">
         <p>{toast.message}</p>
         {toast.amount != null && toast.amount > 0 && (
@@ -49,8 +60,8 @@ function ToastItem({ toast, onDismiss }: { toast: ListToast; onDismiss: (id: str
 export function useListToasts() {
   const [toasts, setToasts] = useState<ListToast[]>([]);
 
-  const push = (message: string, amount?: number) => {
-    setToasts((prev) => [...prev, { id: crypto.randomUUID(), message, amount }]);
+  const push = (message: string, amount?: number, variant: ListToastVariant = "default") => {
+    setToasts((prev) => [...prev, { id: crypto.randomUUID(), message, amount, variant }]);
   };
 
   const dismiss = (id: string) => {

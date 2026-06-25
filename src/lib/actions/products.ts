@@ -1,8 +1,19 @@
 "use server";
 
+import { requireSuperDev } from "@/lib/auth/super-dev";
 import { requireUserId } from "@/lib/auth/session";
+import { inferFromDictionary } from "@/lib/catalog/infer-product";
+import { parsePackageSize, parsePackageFromForm } from "@/lib/catalog/units";
 import { getSql } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+
+export type ProductAttributeSuggestion = {
+  unit: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
+  packageAmount: string | null;
+  source: "catalog" | "dictionary" | null;
+};
 
 export type CatalogProduct = {
   id: string;
@@ -52,6 +63,64 @@ export async function searchCatalogProducts(
   return results;
 }
 
+export async function suggestProductAttributes(name: string): Promise<ProductAttributeSuggestion> {
+  const q = name.trim();
+  const empty: ProductAttributeSuggestion = {
+    unit: null,
+    categoryId: null,
+    categoryName: null,
+    packageAmount: null,
+    source: null,
+  };
+  if (q.length < 2) return empty;
+
+  const sql = getSql();
+  const catalogRows = await sql`
+    select
+      p.unit,
+      p.category_id,
+      c.name as category_name,
+      p.package_size
+    from products p
+    left join categories c on c.id = p.category_id
+    where p.is_global = true
+      and (
+        p.name ilike ${`%${q}%`}
+        or similarity(p.name, ${q}) > 0.35
+      )
+    order by similarity(p.name, ${q}) desc, p.name
+    limit 1
+  `;
+
+  if (catalogRows[0]) {
+    const row = catalogRows[0];
+    const parsed = parsePackageSize(row.package_size as string | null, row.unit as string);
+    return {
+      unit: parsed.unit,
+      categoryId: row.category_id as string | null,
+      categoryName: row.category_name as string | null,
+      packageAmount: parsed.amount,
+      source: "catalog",
+    };
+  }
+
+  const dict = inferFromDictionary(q);
+  if (!dict) return empty;
+
+  const categoryRows = await sql`
+    select id, name from categories where name = ${dict.categoryName} limit 1
+  `;
+  const categoryId = (categoryRows[0]?.id as string | null) ?? null;
+
+  return {
+    unit: dict.unit,
+    categoryId,
+    categoryName: dict.categoryName,
+    packageAmount: dict.packageAmount,
+    source: "dictionary",
+  };
+}
+
 export async function findProductByBarcode(barcode: string): Promise<CatalogProduct | null> {
   const code = barcode.trim();
   if (!code) return null;
@@ -79,25 +148,22 @@ export async function findProductByBarcode(barcode: string): Promise<CatalogProd
   };
 }
 
+function readProductForm(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  const brand = String(formData.get("brand") ?? "").trim() || null;
+  const categoryId = String(formData.get("category_id") ?? "").trim() || null;
+  const { unit, packageSize } = parsePackageFromForm(formData);
+
+  if (!name) throw new Error("Nome do produto é obrigatório");
+  if (!categoryId) throw new Error("Selecione uma categoria");
+
+  return { name, brand, unit, packageSize, categoryId };
+}
+
 export async function createCatalogProduct(formData: FormData) {
   const userId = await requireUserId();
   const sql = getSql();
-
-  const name = String(formData.get("name") ?? "").trim();
-  const brand = String(formData.get("brand") ?? "").trim() || null;
-  const unit = String(formData.get("unit") ?? "").trim() || "un";
-  const packageSize = String(formData.get("package_size") ?? "").trim() || null;
-  const barcode = String(formData.get("barcode") ?? "").trim() || null;
-  const categoryId = String(formData.get("category_id") ?? "").trim() || null;
-
-  if (!name) throw new Error("Nome do produto é obrigatório");
-
-  if (barcode) {
-    const existing = await findProductByBarcode(barcode);
-    if (existing) {
-      throw new Error(`EAN ${barcode} já cadastrado: ${existing.name}`);
-    }
-  }
+  const { name, brand, unit, packageSize, categoryId } = readProductForm(formData);
 
   await sql`
     insert into products (name, brand, unit, package_size, barcode, category_id, is_global, created_by)
@@ -106,7 +172,7 @@ export async function createCatalogProduct(formData: FormData) {
       ${brand},
       ${unit},
       ${packageSize},
-      ${barcode},
+      null,
       ${categoryId},
       true,
       ${userId}
@@ -114,4 +180,59 @@ export async function createCatalogProduct(formData: FormData) {
   `;
 
   revalidatePath("/products");
+}
+
+export async function updateCatalogProduct(formData: FormData) {
+  await requireSuperDev();
+  const sql = getSql();
+
+  const productId = String(formData.get("product_id") ?? "").trim();
+  if (!productId) throw new Error("Produto inválido");
+
+  const { name, brand, unit, packageSize, categoryId } = readProductForm(formData);
+
+  await sql`
+    update products
+    set
+      name = ${name},
+      brand = ${brand},
+      unit = ${unit},
+      package_size = ${packageSize},
+      category_id = ${categoryId}
+    where id = ${productId}
+  `;
+
+  revalidatePath("/products");
+}
+
+export async function deleteCatalogProduct(formData: FormData) {
+  await requireSuperDev();
+  const sql = getSql();
+
+  const productId = String(formData.get("product_id") ?? "").trim();
+  if (!productId) throw new Error("Produto inválido");
+
+  const inUse = await sql`
+    select exists(select 1 from list_items where product_id = ${productId}) as used
+  `;
+  if (Boolean(inUse[0]?.used)) {
+    throw new Error("Produto em uso em listas — não pode ser excluído.");
+  }
+
+  await sql`delete from favorite_products where product_id = ${productId}`;
+  await sql`delete from products where id = ${productId}`;
+
+  revalidatePath("/products");
+}
+
+export async function updateCatalogProductFromForm(formData: FormData) {
+  await updateCatalogProduct(formData);
+  const { redirect } = await import("next/navigation");
+  redirect("/products?updated=1");
+}
+
+export async function deleteCatalogProductFromForm(formData: FormData) {
+  await deleteCatalogProduct(formData);
+  const { redirect } = await import("next/navigation");
+  redirect("/products?deleted=1");
 }

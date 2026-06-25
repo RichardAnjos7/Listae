@@ -26,6 +26,11 @@ import { CompleteListDialog } from "@/components/list/CompleteListDialog";
 import { ListItemCard } from "@/components/list/ListItemCard";
 import { ListStickyTotal } from "@/components/list/ListStickyTotal";
 import { ListToasts, useListToasts } from "@/components/list/ListToasts";
+import {
+  PurchaseCompleteScreen,
+  type PurchaseCompleteSummary,
+} from "@/components/list/PurchaseCompleteScreen";
+import { CompletedListBanner } from "@/components/list/CompletedListBanner";
 import type { Category, ListItemRow } from "@/types";
 import { Check, ClipboardList, Plus, QrCode, Share2, ShoppingCart } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
@@ -96,7 +101,9 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
     onRemoteChange: handleRemoteChange,
   });
 
-  useListPresence(list.id, list.status === "active");
+  const [listStatus, setListStatus] = useState(list.status);
+
+  useListPresence(list.id, listStatus === "active");
 
   const [shopMode, setShopMode] = useState(false);
   const [planMode, setPlanMode] = useState(false);
@@ -111,7 +118,12 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
+  const [completeSummary, setCompleteSummary] = useState<PurchaseCompleteSummary | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setListStatus(list.status);
+  }, [list.status]);
 
   useEffect(() => {
     if (isPlanQuery) {
@@ -459,7 +471,8 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
       <ListItemCard
         key={item.id}
         item={item}
-        shopMode={shopMode}
+        shopMode={shopMode && isActive}
+        readOnly={!isActive}
         categoryIcon={cat?.icon}
         categoryName={showCategoryMeta ? cat?.name : undefined}
         patchItem={patchItem}
@@ -473,6 +486,7 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
 
   const showPlanPanel = planMode || (adding && !shopMode);
   const showAddToggle = !planMode && !shopMode;
+  const isActive = listStatus === "active";
 
   return (
     <div className={`space-y-3 pb-8 ${shopMode ? "pt-0" : "pt-2"}`}>
@@ -489,13 +503,17 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
         shopMode={shopMode}
       />
 
+      {listStatus === "completed" && !completeSummary && (
+        <CompletedListBanner listName={list.name} total={total} />
+      )}
+
       {!shopMode && (
         <div>
           <h1 className="text-xl font-semibold text-slate-900 dark:text-white sr-only">{list.name}</h1>
         </div>
       )}
 
-      {planMode && (
+      {planMode && isActive && (
         <PlanListBanner
           itemCount={items.length}
           pricedCount={pricedCount}
@@ -507,6 +525,7 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
         />
       )}
 
+      {isActive && (
       <div className="flex flex-wrap gap-2">
         {showAddToggle && (
           <button
@@ -562,7 +581,7 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
           <Share2 className="h-4 w-4" />
           Compartilhar
         </button>
-        {list.status === "active" && (
+        {listStatus === "active" && (
           <button
             type="button"
             disabled={busy}
@@ -574,6 +593,7 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
           </button>
         )}
       </div>
+      )}
 
       <div className="flex flex-wrap gap-1.5 items-center">
         <button
@@ -678,15 +698,45 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
         busy={busy}
         onConfirm={async () => {
           setBusy(true);
+          const pricesSavedCount = items.filter(
+            (i) => i.unit_price != null && Number(i.unit_price) > 0
+          ).length;
+          const summary: PurchaseCompleteSummary = {
+            listId: list.id,
+            listName: list.name,
+            supermarketName: list.supermarket?.name ?? null,
+            total,
+            itemCount: items.length,
+            pricesSavedCount,
+          };
           try {
             await completeList(list.id);
             setCompleteOpen(false);
+            setListStatus("completed");
+            setShopMode(false);
+            setPlanMode(false);
+            setAdding(false);
+            setCompleteSummary(summary);
+            pushToast("Compra concluída! Preços salvos no histórico.", undefined, "success");
+            if (typeof navigator !== "undefined" && navigator.vibrate) {
+              navigator.vibrate([100, 50, 100]);
+            }
             router.refresh();
           } finally {
             setBusy(false);
           }
         }}
       />
+
+      {completeSummary && (
+        <PurchaseCompleteScreen
+          summary={completeSummary}
+          onDismiss={() => {
+            setCompleteSummary(null);
+            router.refresh();
+          }}
+        />
+      )}
 
       {groupedFiltered ? (
         <div className="space-y-4">
