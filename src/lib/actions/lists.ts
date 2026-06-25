@@ -53,6 +53,24 @@ export async function createList(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim() || "Nova lista";
   const supermarketId = String(formData.get("supermarket_id") ?? "").trim() || null;
 
+  const recent = await sql`
+    select id
+    from shopping_lists
+    where owner_id = ${userId}
+      and status = 'active'
+      and name = ${name}
+      and (
+        (${supermarketId}::uuid is null and supermarket_id is null)
+        or supermarket_id = ${supermarketId}::uuid
+      )
+      and created_at > now() - interval '45 seconds'
+    order by created_at desc
+    limit 1
+  `;
+  if (recent[0]?.id) {
+    return recent[0].id as string;
+  }
+
   const rows = await sql`
     insert into shopping_lists (name, owner_id, supermarket_id, share_code)
     values (
@@ -364,6 +382,31 @@ export async function completeList(listId: string) {
   revalidatePath("/history");
   revalidatePath("/prices");
   revalidatePath("/alerts");
+}
+
+export async function deleteList(listId: string) {
+  const userId = await requireUserId();
+  const sql = getSql();
+
+  const rows = await sql`
+    select owner_id from shopping_lists where id = ${listId} limit 1
+  `;
+  if (!rows[0]) throw new Error("Lista não encontrada");
+  if ((rows[0].owner_id as string) !== userId) {
+    throw new Error("Só o dono da lista pode excluí-la");
+  }
+
+  await deleteListPresenceForList(listId);
+  await sql`delete from shopping_lists where id = ${listId}`;
+
+  revalidatePath("/lists");
+  revalidatePath("/");
+}
+
+export async function deleteListFromForm(formData: FormData) {
+  const listId = String(formData.get("list_id") ?? "").trim();
+  if (!listId) throw new Error("Lista inválida");
+  await deleteList(listId);
 }
 
 export async function joinListByCodeAction(code: string) {

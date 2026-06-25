@@ -32,8 +32,8 @@ import {
 } from "@/components/list/PurchaseCompleteScreen";
 import { CompletedListBanner } from "@/components/list/CompletedListBanner";
 import type { Category, ListItemRow } from "@/types";
-import { Check, ClipboardList, Plus, QrCode, Share2, ShoppingCart } from "lucide-react";
-import { QRCodeSVG } from "qrcode.react";
+import { Check, ClipboardList, Plus, Share2, ShoppingCart } from "lucide-react";
+import { ShareListDialog } from "@/components/list/ShareListDialog";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -128,7 +128,7 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
   useEffect(() => {
     if (isPlanQuery) {
       setPlanMode(true);
-      setAdding(true);
+      setAdding(false);
       setShopMode(false);
       return;
     }
@@ -188,7 +188,7 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
 
   const enterPlanMode = () => {
     setPlanMode(true);
-    setAdding(true);
+    setAdding(false);
     setShopMode(false);
     try {
       localStorage.setItem(SHOP_MODE_KEY, "0");
@@ -228,7 +228,7 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
   );
 
   useEffect(() => {
-    const panelOpen = planMode || (adding && !shopMode);
+    const panelOpen = planMode ? adding : adding && !shopMode;
     if (!panelOpen) return;
     const t = window.setTimeout(() => void searchProductsHandler(query, categoryFilter), 250);
     return () => window.clearTimeout(t);
@@ -241,11 +241,21 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
       const url = `${typeof window !== "undefined" ? window.location.origin : ""}/lists/join/${code}`;
       setShareUrl(url);
       setShareOpen(true);
-      if (navigator.share) {
-        await navigator.share({ title: list.name, text: "Lista compartilhada no Listaê", url });
-      }
     } finally {
       setBusy(false);
+    }
+  };
+
+  const nativeShare = async () => {
+    if (!shareUrl || !navigator.share) return;
+    try {
+      await navigator.share({
+        title: list.name,
+        text: "Lista compartilhada no Listaê",
+        url: shareUrl,
+      });
+    } catch {
+      /* usuário cancelou */
     }
   };
 
@@ -484,7 +494,7 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
   const categoryName = (id: string | null) =>
     id ? categoryById.get(id)?.name ?? null : null;
 
-  const showPlanPanel = planMode || (adding && !shopMode);
+  const showPlanPanel = planMode ? adding : adding && !shopMode;
   const showAddToggle = !planMode && !shopMode;
   const isActive = listStatus === "active";
 
@@ -519,7 +529,9 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
           pricedCount={pricedCount}
           estimatedTotal={total}
           suggestionCount={suggestions.filter((s) => !addedProductIds.has(s.id)).length}
+          addPanelOpen={adding}
           busy={busy}
+          onOpenAddPanel={() => setAdding(true)}
           onAddSuggestions={() => void handleAddAllSuggestions()}
           onGoToShop={finishPlanning}
         />
@@ -596,6 +608,8 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
       )}
 
       <div className="flex flex-wrap gap-1.5 items-center">
+        {!planMode && (
+          <>
         <button
           type="button"
           onClick={() => setMineOnly((v) => !v)}
@@ -625,6 +639,8 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
           <span className="text-[10px] text-slate-500">
             Filtro: {categoryName(listCategoryFilter)}
           </span>
+        )}
+          </>
         )}
       </div>
 
@@ -670,25 +686,18 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
         onScan={(code) => void handleBarcodeScan(code)}
       />
 
-      {shareOpen && shareUrl && (
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900 space-y-3">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <QrCode className="h-4 w-4" />
-            Compartilhar lista — peça para escanear ou abrir o link
-          </div>
-          <div className="flex justify-center bg-white p-2 rounded-xl">
-            <QRCodeSVG value={shareUrl} size={160} level="M" />
-          </div>
-          <p className="text-xs text-slate-500 break-all">{shareUrl}</p>
-          <button
-            type="button"
-            onClick={copyLink}
-            className="w-full rounded-xl bg-slate-100 dark:bg-slate-800 py-2 text-sm font-medium"
-          >
-            Copiar link
-          </button>
-        </div>
-      )}
+      <ShareListDialog
+        open={shareOpen}
+        shareUrl={shareUrl}
+        listName={list.name}
+        onClose={() => setShareOpen(false)}
+        onCopyLink={copyLink}
+        onNativeShare={
+          typeof navigator !== "undefined" && "share" in navigator
+            ? () => void nativeShare()
+            : undefined
+        }
+      />
 
       <CompleteListDialog
         open={completeOpen}

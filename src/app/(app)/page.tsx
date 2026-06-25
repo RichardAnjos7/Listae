@@ -1,6 +1,8 @@
+import { CityCommunityLive } from "@/components/prices/CityCommunityLive";
 import { getUserNotifications } from "@/lib/actions/alerts";
 import { getSessionUserId } from "@/lib/auth/session";
 import { getSql } from "@/lib/db";
+import { fetchCommunityInsights } from "@/lib/prices/community-insights";
 import type { MonthlyStats, SavingsSuggestion } from "@/types";
 import { formatBRL } from "@/lib/utils";
 import { format } from "date-fns";
@@ -22,13 +24,18 @@ export default async function DashboardPage() {
   if (!userId) return null;
 
   const sql = getSql();
-  const [mostRes, varRes, marketsRes, monthlyRes, savingsRes, notifications] = await Promise.all([
+  const profileRows = await sql`select city from profiles where id = ${userId} limit 1`;
+  const userCity = (profileRows[0]?.city as string | null) ?? null;
+
+  const [mostRes, varRes, marketsRes, monthlyRes, savingsRes, notifications, community] =
+    await Promise.all([
     sql`select * from public.get_most_bought_products(${userId}::uuid, ${8})`,
     sql`select * from public.get_price_variations(${userId}::uuid, ${8})`,
     sql`select * from public.compare_supermarket_prices(${userId}::uuid)`,
     sql`select public.get_monthly_stats(${userId}::uuid) as stats`,
     sql`select public.get_savings_suggestion(${userId}::uuid) as suggestion`,
     getUserNotifications(userId, 5),
+    fetchCommunityInsights(userCity).catch(() => null),
   ]);
 
   const unreadAlerts = notifications.filter((n) => !n.is_read);
@@ -60,6 +67,31 @@ export default async function DashboardPage() {
   const lastAt = monthly?.last_purchase_at
     ? format(new Date(monthly.last_purchase_at), "dd MMM yyyy, HH:mm", { locale: ptBR })
     : null;
+
+  const minMarketAvg =
+    markets.length > 0 ? Math.min(...markets.map((m) => Number(m.avg_total))) : null;
+
+  function marketVsCheapest(avgTotal: number): { pct: number | null; direction: "up" | "down" | "flat" } {
+    if (minMarketAvg == null || minMarketAvg <= 0 || markets.length < 2) {
+      return { pct: null, direction: "flat" };
+    }
+    if (avgTotal <= minMarketAvg) return { pct: 0, direction: "flat" };
+    const pct = Math.round(((avgTotal - minMarketAvg) / minMarketAvg) * 1000) / 10;
+    return { pct, direction: "up" };
+  }
+
+  function lastVsAvg(
+    lastTotal: number | null,
+    avgTotal: number,
+    tripCount: number
+  ): { pct: number | null; direction: "up" | "down" | "flat" } {
+    if (lastTotal == null || tripCount < 2 || avgTotal <= 0) {
+      return { pct: null, direction: "flat" };
+    }
+    const pct = Math.round(((lastTotal - avgTotal) / avgTotal) * 1000) / 10;
+    if (pct === 0) return { pct: 0, direction: "flat" };
+    return { pct: Math.abs(pct), direction: pct > 0 ? "up" : "down" };
+  }
 
   return (
     <div className="space-y-5 pb-4">
@@ -96,6 +128,10 @@ export default async function DashboardPage() {
         </div>
       </section>
 
+      {community && (
+        <CityCommunityLive city={userCity} initialData={community} compact />
+      )}
+
       {savings.has_suggestion && savings.estimated_savings != null && savings.estimated_savings > 0 && (
         <section className="rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/80 dark:bg-emerald-950/40 p-4 text-sm">
           <p className="font-medium text-emerald-900 dark:text-emerald-100 flex items-center gap-2">
@@ -119,18 +155,60 @@ export default async function DashboardPage() {
           </p>
         ) : (
           <ul className="space-y-2 text-sm">
-            {markets.map((m) => (
+            {markets.map((m) => {
+              const vsCheapest = marketVsCheapest(Number(m.avg_total));
+              const lastDelta = lastVsAvg(
+                m.last_total != null ? Number(m.last_total) : null,
+                Number(m.avg_total),
+                Number(m.trip_count)
+              );
+              const isCheapest =
+                minMarketAvg != null &&
+                markets.length > 1 &&
+                Number(m.avg_total) <= minMarketAvg;
+
+              return (
                 <li
                   key={m.supermarket_id}
-                  className="flex justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2 last:border-0"
+                  className="flex justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-2 last:border-0"
                 >
-                  <span className="font-medium truncate">{m.supermarket_name}</span>
-                  <span className="text-slate-600 dark:text-slate-400 text-right shrink-0">
-                    média {formatBRL(Number(m.avg_total))}
-                    <span className="block text-[10px] text-slate-400">{m.trip_count} compras</span>
-                  </span>
+                  <div className="min-w-0">
+                    <span className="font-medium truncate block">{m.supermarket_name}</span>
+                    <span className="text-[10px] text-slate-400">{m.trip_count} compras</span>
+                  </div>
+                  <div className="text-right shrink-0 space-y-0.5">
+                    <p className="text-slate-600 dark:text-slate-400">
+                      média {formatBRL(Number(m.avg_total))}
+                    </p>
+                    {isCheapest && markets.length > 1 && (
+                      <p className="text-[10px] font-medium text-emerald-600">menor média</p>
+                    )}
+                    {!isCheapest && vsCheapest.pct != null && vsCheapest.pct > 0 && (
+                      <p className="text-[10px] font-medium text-red-600 flex items-center justify-end gap-0.5">
+                        <ArrowUpRight className="h-3 w-3" />+{vsCheapest.pct}% vs mais barato
+                      </p>
+                    )}
+                    {lastDelta.pct != null && lastDelta.pct > 0 && (
+                      <p
+                        className={`text-[10px] font-medium flex items-center justify-end gap-0.5 ${
+                          lastDelta.direction === "up"
+                            ? "text-red-600"
+                            : lastDelta.direction === "down"
+                              ? "text-emerald-600"
+                              : "text-slate-500"
+                        }`}
+                      >
+                        {lastDelta.direction === "up" && <ArrowUpRight className="h-3 w-3" />}
+                        {lastDelta.direction === "down" && <ArrowDownRight className="h-3 w-3" />}
+                        {lastDelta.direction === "flat" && <Minus className="h-3 w-3" />}
+                        última {lastDelta.direction === "down" ? "-" : lastDelta.direction === "up" ? "+" : ""}
+                        {lastDelta.pct}% vs média
+                      </p>
+                    )}
+                  </div>
                 </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </section>

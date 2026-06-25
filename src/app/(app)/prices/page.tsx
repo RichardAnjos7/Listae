@@ -1,5 +1,11 @@
+import { CityCommunityLive } from "@/components/prices/CityCommunityLive";
+import { CityPriceFeed } from "@/components/prices/CityPriceFeed";
+import { UserPricesSection } from "@/components/prices/UserPricesSection";
 import { getSessionUserId } from "@/lib/auth/session";
 import { getSql } from "@/lib/db";
+import { fetchCommunityInsights } from "@/lib/prices/community-insights";
+import { fetchCityPriceFeed } from "@/lib/prices/city-feed";
+import { fetchUserContributedPrices, fetchUserRecentPurchases } from "@/lib/prices/user-feed";
 import { labelFromFreshnessKey, labelFromRecordedAt } from "@/lib/prices/freshness";
 import { formatBRL } from "@/lib/utils";
 import { Search } from "lucide-react";
@@ -28,6 +34,7 @@ export default async function PricesPage({
 
   const { q } = await searchParams;
   const query = (q ?? "").trim();
+  const isSearching = query.length >= 2;
 
   const sql = getSql();
   const profileRows = await sql`
@@ -35,23 +42,33 @@ export default async function PricesPage({
   `;
   const userCity = (profileRows[0]?.city as string | null) ?? null;
 
-  const rows: SearchRow[] =
-    query.length >= 2
-      ? ((await sql`
-          select * from public.search_shared_product_prices(
-            ${query},
-            ${userCity},
-            ${40}
-          )
-        `) as SearchRow[])
-      : [];
+  const rows: SearchRow[] = isSearching
+    ? ((await sql`
+        select * from public.search_shared_product_prices(
+          ${query},
+          ${userCity},
+          ${40}
+        )
+      `) as SearchRow[])
+    : [];
+
+  const [feed, userPurchases, userPrices, community] = isSearching
+    ? [null, [], [], null]
+    : await Promise.all([
+        fetchCityPriceFeed(userCity),
+        fetchUserRecentPurchases(userId),
+        fetchUserContributedPrices(userId, userCity),
+        fetchCommunityInsights(userCity).catch(() => null),
+      ]);
+
+  const hasUserData = userPurchases.length > 0 || userPrices.length > 0;
 
   return (
     <div className="space-y-4 pb-4">
       <div>
         <h1 className="text-xl font-semibold text-slate-900 dark:text-white">Preços na cidade</h1>
         <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
-          Busca na base compartilhada alimentada ao concluir compras.
+          Base compartilhada alimentada ao concluir compras.
           {userCity ? (
             <>
               {" "}
@@ -93,58 +110,88 @@ export default async function PricesPage({
         <p className="text-xs text-amber-700 dark:text-amber-300">Digite pelo menos 2 caracteres.</p>
       )}
 
-      {query.length >= 2 && rows.length === 0 && (
+      {!isSearching && community && (
+        <CityCommunityLive city={userCity} initialData={community} />
+      )}
+
+      {!isSearching && hasUserData && (
+        <UserPricesSection purchases={userPurchases} prices={userPrices} city={userCity} />
+      )}
+
+      {!isSearching && feed && (
+        <CityPriceFeed
+          city={userCity}
+          stats={feed.stats}
+          drops={feed.drops}
+          lowest={feed.lowest}
+          recent={feed.recent}
+        />
+      )}
+
+      {isSearching && rows.length === 0 && (
         <p className="text-sm text-slate-500 text-center py-12">
           Nenhum preço verificado para &quot;{query}&quot;
           {userCity ? ` em ${userCity}` : ""}. Conclua listas com preços para alimentar a base.
         </p>
       )}
 
-      {rows.length > 0 && (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 dark:border-slate-800 text-left text-xs text-slate-500">
-                <th className="p-3 font-medium">Produto</th>
-                <th className="p-3 font-medium">Mercado</th>
-                <th className="p-3 font-medium text-right">Preço</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => {
-                const title = [r.product_name, r.brand, r.package_size].filter(Boolean).join(" · ");
-                const fresh =
-                  labelFromRecordedAt(r.recorded_at) || labelFromFreshnessKey(r.freshness_label);
-                const stale = r.freshness_label === "antigo";
-                return (
-                  <tr
-                    key={`${r.product_id}-${r.store_name}-${i}`}
-                    className="border-b border-slate-50 dark:border-slate-800/80 last:border-0"
-                  >
-                    <td className="p-3 align-top">
-                      <p className="font-medium text-slate-900 dark:text-white leading-snug">{title}</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">{r.unit}</p>
-                    </td>
-                    <td className="p-3 align-top text-slate-700 dark:text-slate-300">
-                      <p>{r.store_name}</p>
-                      {r.city && <p className="text-[10px] text-slate-400">{r.city}</p>}
-                    </td>
-                    <td className="p-3 align-top text-right whitespace-nowrap">
-                      <p className="font-semibold text-emerald-700 dark:text-emerald-400">
-                        {formatBRL(Number(r.unit_price))}
-                      </p>
-                      <p
-                        className={`text-[10px] mt-0.5 ${stale ? "text-amber-600" : "text-slate-400"}`}
-                      >
-                        {fresh}
-                      </p>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      {isSearching && rows.length > 0 && (
+        <>
+          <p className="text-xs text-slate-500">
+            {rows.length} resultado{rows.length !== 1 ? "s" : ""} para &quot;{query}&quot;
+            {userCity ? ` em ${userCity}` : ""}
+          </p>
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-slate-800 text-left text-xs text-slate-500">
+                  <th className="p-3 font-medium">Produto</th>
+                  <th className="p-3 font-medium">Mercado</th>
+                  <th className="p-3 font-medium text-right">Preço</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => {
+                  const title = [r.product_name, r.brand, r.package_size].filter(Boolean).join(" · ");
+                  const fresh =
+                    labelFromRecordedAt(r.recorded_at) || labelFromFreshnessKey(r.freshness_label);
+                  const stale = r.freshness_label === "antigo";
+                  return (
+                    <tr
+                      key={`${r.product_id}-${r.store_name}-${i}`}
+                      className="border-b border-slate-50 dark:border-slate-800/80 last:border-0"
+                    >
+                      <td className="p-3 align-top">
+                        <p className="font-medium text-slate-900 dark:text-white leading-snug">{title}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">{r.unit}</p>
+                      </td>
+                      <td className="p-3 align-top text-slate-700 dark:text-slate-300">
+                        <p>{r.store_name}</p>
+                        {r.city && <p className="text-[10px] text-slate-400">{r.city}</p>}
+                      </td>
+                      <td className="p-3 align-top text-right whitespace-nowrap">
+                        <p className="font-semibold text-emerald-700 dark:text-emerald-400">
+                          {formatBRL(Number(r.unit_price))}
+                        </p>
+                        <p
+                          className={`text-[10px] mt-0.5 ${stale ? "text-amber-600" : "text-slate-400"}`}
+                        >
+                          {fresh}
+                        </p>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <Link
+            href="/prices"
+            className="block text-center text-xs text-emerald-600 font-medium py-1"
+          >
+            ← Ver feed da cidade
+          </Link>
+        </>
       )}
 
       <p className="text-xs text-slate-500 text-center">

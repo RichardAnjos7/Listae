@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ShoppingCart, Sparkles } from "lucide-react";
+import { Check, Plus, ShoppingCart, Sparkles } from "lucide-react";
 import { formatBRL } from "@/lib/utils";
 
 type Props = {
@@ -8,7 +8,9 @@ type Props = {
   pricedCount: number;
   estimatedTotal: number;
   suggestionCount: number;
+  addPanelOpen: boolean;
   busy: boolean;
+  onOpenAddPanel: () => void;
   onAddSuggestions: () => void;
   onGoToShop: () => void;
 };
@@ -18,7 +20,9 @@ export function PlanListBanner({
   pricedCount,
   estimatedTotal,
   suggestionCount,
+  addPanelOpen,
   busy,
+  onOpenAddPanel,
   onAddSuggestions,
   onGoToShop,
 }: Props) {
@@ -38,6 +42,17 @@ export function PlanListBanner({
       </div>
 
       <div className="flex flex-wrap gap-2">
+        {!addPanelOpen && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onOpenAddPanel}
+            className="inline-flex items-center gap-1 rounded-xl bg-emerald-600 text-white text-sm font-medium px-3 py-2 hover:bg-emerald-700 disabled:opacity-50"
+          >
+            <Plus className="h-4 w-4" />
+            Adicionar produtos
+          </button>
+        )}
         {suggestionCount > 0 && (
           <button
             type="button"

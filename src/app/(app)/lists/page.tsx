@@ -1,3 +1,4 @@
+import { ListRow } from "@/components/lists/ListRow";
 import { getSessionUserId } from "@/lib/auth/session";
 import { getSql } from "@/lib/db";
 import Link from "next/link";
@@ -14,6 +15,7 @@ export default async function ListsPage() {
       sl.name,
       sl.status,
       sl.updated_at,
+      sl.owner_id,
       sm.name as supermarket_name
     from shopping_lists sl
     left join supermarkets sm on sm.id = sl.supermarket_id
@@ -40,32 +42,14 @@ export default async function ListsPage() {
 
       <ul className="space-y-2">
         {rows.map((l) => (
-          <li key={l.id as string}>
-            <Link
-              href={`/lists/${l.id}`}
-              className="block rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm"
-            >
-              <div className="flex justify-between gap-2">
-                <div>
-                  <p className="font-medium text-slate-900 dark:text-white">{l.name as string}</p>
-                  {l.supermarket_name && (
-                    <p className="text-xs text-slate-500">{l.supermarket_name as string}</p>
-                  )}
-                </div>
-                <span
-                  className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 h-fit ${
-                    l.status === "active"
-                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
-                      : l.status === "completed"
-                        ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-                        : "bg-slate-100 text-slate-500"
-                  }`}
-                >
-                  {l.status === "active" ? "Ativa" : l.status === "completed" ? "Concluída" : (l.status as string)}
-                </span>
-              </div>
-            </Link>
-          </li>
+          <ListRow
+            key={l.id as string}
+            id={l.id as string}
+            name={l.name as string}
+            status={l.status as string}
+            supermarketName={(l.supermarket_name as string | null) ?? null}
+            canDelete={(l.owner_id as string) === userId}
+          />
         ))}
       </ul>
 
