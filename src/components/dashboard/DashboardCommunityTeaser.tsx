@@ -1,0 +1,90 @@
+import type { CommunityInsights } from "@/lib/prices/community-insights";
+import { labelFromRecordedAt } from "@/lib/prices/freshness";
+import { formatBRL } from "@/lib/utils";
+import { Activity, ChevronRight, MapPin } from "lucide-react";
+import Link from "next/link";
+
+type Props = {
+  city: string | null;
+  data: CommunityInsights | null;
+};
+
+function productLabel(name: string, brand: string | null) {
+  return brand ? `${name} · ${brand}` : name;
+}
+
+export function DashboardCommunityTeaser({ city, data }: Props) {
+  if (!city) {
+    return (
+      <section className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 p-4 text-sm text-slate-500">
+        <MapPin className="h-5 w-5 text-slate-400 mb-2" />
+        <Link href="/profile" className="text-emerald-600 font-medium">
+          Defina sua cidade
+        </Link>{" "}
+        para ver preços da comunidade.
+      </section>
+    );
+  }
+
+  const live = data?.liveFeed.slice(0, 3) ?? [];
+  const weekCount = data?.stats.week_count ?? 0;
+
+  if (weekCount === 0 && live.length === 0) {
+    return (
+      <Link
+        href="/prices"
+        className="block rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm hover:border-emerald-300 dark:hover:border-emerald-800 transition-colors"
+      >
+        <p className="text-sm font-medium text-slate-800 dark:text-slate-200 flex items-center justify-between">
+          <span>Preços em {city}</span>
+          <ChevronRight className="h-4 w-4 text-slate-400" />
+        </p>
+        <p className="text-xs text-slate-500 mt-1">
+          Ainda sem registros na cidade. Conclua compras para alimentar a base.
+        </p>
+      </Link>
+    );
+  }
+
+  return (
+    <Link
+      href="/prices"
+      className="block rounded-2xl border border-emerald-200/60 dark:border-emerald-900/50 bg-emerald-50/30 dark:bg-emerald-950/20 p-4 shadow-sm hover:border-emerald-400 dark:hover:border-emerald-700 transition-colors"
+    >
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <h2 className="text-sm font-semibold text-emerald-900 dark:text-emerald-100 flex items-center gap-2">
+          <Activity className="h-4 w-4" />
+          Ao vivo · {city}
+        </h2>
+        <ChevronRight className="h-4 w-4 text-emerald-600 shrink-0" />
+      </div>
+      {weekCount > 0 && (
+        <p className="text-xs text-slate-600 dark:text-slate-300 mb-2">
+          <strong>{weekCount}</strong> preços esta semana na comunidade
+        </p>
+      )}
+      {live.length > 0 ? (
+        <ul className="space-y-1.5 text-sm">
+          {live.map((item) => (
+            <li
+              key={item.id}
+              className="flex justify-between gap-2 py-1 border-b border-emerald-200/40 last:border-0"
+            >
+              <span className="min-w-0 truncate text-slate-800 dark:text-slate-200 text-xs">
+                <span className="text-[10px] text-slate-400 mr-1">
+                  {labelFromRecordedAt(item.recorded_at)}
+                </span>
+                {productLabel(item.product_name, item.brand)} — {item.store_name}
+              </span>
+              <span className="shrink-0 font-semibold text-emerald-700 dark:text-emerald-400 text-xs tabular-nums">
+                {formatBRL(item.unit_price)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-slate-500">Nenhum registro recente.</p>
+      )}
+    </Link>
+  );
+}

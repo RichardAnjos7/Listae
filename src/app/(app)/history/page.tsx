@@ -63,10 +63,12 @@ export default async function HistoryPage({
 
   return (
     <div className="space-y-4 pb-4">
-      <h1 className="text-xl font-semibold text-slate-900 dark:text-white">Histórico</h1>
-      <p className="text-sm text-slate-600 dark:text-slate-400">
-        Compras concluídas e totais registrados.
-      </p>
+      <div>
+        <h1 className="text-xl font-semibold text-slate-900 dark:text-white">Histórico</h1>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
+          Compras concluídas e totais registrados.
+        </p>
+      </div>
 
       {highlighted && (
         <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/80 dark:bg-emerald-950/40 p-4 flex items-start gap-3">
