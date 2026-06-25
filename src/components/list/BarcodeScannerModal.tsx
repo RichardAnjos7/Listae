@@ -57,7 +57,7 @@ export function BarcodeScannerModal({ open, onClose, onScan }: Props) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/90">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-black/90 pb-[env(safe-area-inset-bottom,0px)]">
       <div className="flex items-center justify-between px-4 py-3 text-white">
         <span className="text-sm font-medium">Escanear código de barras</span>
         <button type="button" onClick={onClose} className="p-1" aria-label="Fechar">

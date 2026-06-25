@@ -33,7 +33,7 @@ export function CompleteListDialog({ open, listId, listTotal, onClose, onConfirm
   const canConfirmStep2 = confirmText.trim().toUpperCase() === "CONCLUIR";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-3">
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 px-3 pt-3 pb-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.75rem)] sm:p-3">
       <div className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 space-y-4 shadow-xl">
         <div className="flex items-start justify-between gap-2">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Concluir compra</h2>

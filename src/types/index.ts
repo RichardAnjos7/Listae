@@ -51,6 +51,7 @@ export type ListItemRow = {
   notes: string | null;
   created_at: string;
   updated_at?: string;
+  last_price?: number | null;
   product?: Product;
   added_by_profile?: Pick<Profile, "id" | "name"> | null;
 };

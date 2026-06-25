@@ -1,9 +1,12 @@
 "use client";
 
 import { Check, ShoppingCart, Sparkles } from "lucide-react";
+import { formatBRL } from "@/lib/utils";
 
 type Props = {
   itemCount: number;
+  pricedCount: number;
+  estimatedTotal: number;
   suggestionCount: number;
   busy: boolean;
   onAddSuggestions: () => void;
@@ -12,11 +15,15 @@ type Props = {
 
 export function PlanListBanner({
   itemCount,
+  pricedCount,
+  estimatedTotal,
   suggestionCount,
   busy,
   onAddSuggestions,
   onGoToShop,
 }: Props) {
+  const unpricedCount = itemCount - pricedCount;
+
   return (
     <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/70 dark:bg-emerald-950/40 p-4 space-y-3">
       <div>
@@ -57,12 +64,24 @@ export function PlanListBanner({
       </div>
 
       {itemCount > 0 && (
-        <p className="text-[10px] text-emerald-700/70 dark:text-emerald-300/60 flex items-center gap-1">
-          <Check className="h-3 w-3" />
-          {itemCount} {itemCount === 1 ? "item na lista" : "itens na lista"} — ajuste as quantidades abaixo
-        </p>
+        <div className="text-[10px] text-emerald-700/70 dark:text-emerald-300/60 space-y-0.5">
+          <p className="flex items-center gap-1">
+            <Check className="h-3 w-3 shrink-0" />
+            {itemCount} {itemCount === 1 ? "item" : "itens"} · {pricedCount} com preço estimado
+            {estimatedTotal > 0 && (
+              <span className="font-semibold text-emerald-800 dark:text-emerald-200">
+                · total ~{formatBRL(estimatedTotal)}
+              </span>
+            )}
+          </p>
+          {unpricedCount > 0 && (
+            <p className="pl-4 text-amber-700/80 dark:text-amber-300/70">
+              {unpricedCount} {unpricedCount === 1 ? "item sem" : "itens sem"} preço — toque em
+              &quot;Usar&quot; para preencher com o último valor
+            </p>
+          )}
+        </div>
       )}
     </div>
   );
-
 }

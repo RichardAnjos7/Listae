@@ -43,7 +43,7 @@ export default async function ListsPage() {
           <li key={l.id as string}>
             <Link
               href={`/lists/${l.id}`}
-              className="block rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm active:scale-[0.99] transition-transform"
+              className="block rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm"
             >
               <div className="flex justify-between gap-2">
                 <div>

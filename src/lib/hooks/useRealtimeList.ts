@@ -45,6 +45,13 @@ export function useRealtimeList({ listId, currentUserId, initial, onRemoteChange
   const itemsRef = useRef(items);
   const onRemoteChangeRef = useRef(onRemoteChange);
 
+  const dirtyPatchesRef = useRef(new Map<string, Partial<ListItemRowExt>>());
+
+  useEffect(() => {
+    dirtyPatchesRef.current.clear();
+    setItems(initial);
+  }, [listId, initial]);
+
   useEffect(() => {
     itemsRef.current = items;
   }, [items]);
@@ -53,9 +60,14 @@ export function useRealtimeList({ listId, currentUserId, initial, onRemoteChange
     onRemoteChangeRef.current = onRemoteChange;
   }, [onRemoteChange]);
 
-  useEffect(() => {
-    setItems(initial);
-  }, [initial, listId]);
+  const mergeDirtyPatches = useCallback((rows: ListItemRowExt[]) => {
+    const dirty = dirtyPatchesRef.current;
+    if (dirty.size === 0) return rows;
+    return rows.map((item) => {
+      const local = dirty.get(item.id);
+      return local ? { ...item, ...local } : item;
+    });
+  }, []);
 
   const refresh = useCallback(async () => {
     if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -108,13 +120,13 @@ export function useRealtimeList({ listId, currentUserId, initial, onRemoteChange
         }
       }
 
-      setItems(next);
+      setItems(mergeDirtyPatches(next));
       setLastSyncedAt(new Date());
       setSyncStatus("live");
     } catch {
       setSyncStatus(typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "syncing");
     }
-  }, [listId, currentUserId]);
+  }, [listId, currentUserId, mergeDirtyPatches]);
 
   useEffect(() => {
     let cancelled = false;
@@ -185,7 +197,12 @@ export function useRealtimeList({ listId, currentUserId, initial, onRemoteChange
   }, [listId, currentUserId, refresh]);
 
   const applyOptimisticAdd = useCallback(
-    (product: NonNullable<ListItemRowExt["product"]>, quantity = 1, unitPrice: number | null = null) => {
+    (
+      product: NonNullable<ListItemRowExt["product"]>,
+      quantity = 1,
+      unitPrice: number | null = null,
+      lastPrice: number | null = null
+    ) => {
       setItems((prev) => {
         const real = prev.filter((i) => !i._optimistic);
         const existing = real.find((i) => i.product_id === product.id);
@@ -196,6 +213,7 @@ export function useRealtimeList({ listId, currentUserId, initial, onRemoteChange
                   ...i,
                   quantity: Number(i.quantity) + quantity,
                   unit_price: i.unit_price ?? unitPrice,
+                  last_price: i.last_price ?? lastPrice ?? unitPrice,
                 }
               : i
           );
@@ -206,6 +224,7 @@ export function useRealtimeList({ listId, currentUserId, initial, onRemoteChange
           product_id: product.id,
           quantity,
           unit_price: unitPrice,
+          last_price: lastPrice ?? unitPrice,
           checked: false,
           added_by: currentUserId,
           notes: null,
@@ -221,9 +240,15 @@ export function useRealtimeList({ listId, currentUserId, initial, onRemoteChange
   );
 
   const applyOptimisticPatch = useCallback((itemId: string, patch: Partial<ListItemRowExt>) => {
-    setItems((prev) =>
-      prev.map((i) => (i.id === itemId ? { ...i, ...patch } : i))
+    const prev = dirtyPatchesRef.current.get(itemId) ?? {};
+    dirtyPatchesRef.current.set(itemId, { ...prev, ...patch });
+    setItems((prevItems) =>
+      prevItems.map((i) => (i.id === itemId ? { ...i, ...patch } : i))
     );
+  }, []);
+
+  const clearDirtyPatch = useCallback((itemId: string) => {
+    dirtyPatchesRef.current.delete(itemId);
   }, []);
 
   const applyOptimisticRemove = useCallback((itemId: string) => {
@@ -257,5 +282,6 @@ export function useRealtimeList({ listId, currentUserId, initial, onRemoteChange
     applyOptimisticAdd,
     applyOptimisticPatch,
     applyOptimisticRemove,
+    clearDirtyPatch,
   };
 }

@@ -17,6 +17,7 @@ import {
   type ListItemRowExt,
 } from "@/lib/hooks/useRealtimeList";
 import { enqueueListAction, flushListOfflineQueue } from "@/lib/hooks/useListOfflineQueue";
+import { useDebouncedItemPatch } from "@/lib/hooks/useDebouncedItemPatch";
 import { useListPresence } from "@/lib/hooks/useListPresence";
 import { AddProductPanel } from "@/components/list/AddProductPanel";
 import { PlanListBanner } from "@/components/list/PlanListBanner";
@@ -29,7 +30,7 @@ import type { Category, ListItemRow } from "@/types";
 import { Check, ClipboardList, Plus, QrCode, Share2, ShoppingCart } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Row = ListItemRow & {
   product?: ListItemRow["product"] | null;
@@ -87,6 +88,7 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
     applyOptimisticAdd,
     applyOptimisticPatch,
     applyOptimisticRemove,
+    clearDirtyPatch,
   } = useRealtimeList({
     listId: list.id,
     currentUserId,
@@ -247,11 +249,12 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
       unit: p.unit,
       category_id: p.category_id,
       package_size: p.package_size,
+      image_url: p.image_url,
       barcode: p.barcode,
     };
     const suggestedPrice = "last_price" in p && p.last_price != null ? Number(p.last_price) : null;
 
-    applyOptimisticAdd(product, 1, suggestedPrice);
+    applyOptimisticAdd(product, 1, suggestedPrice, suggestedPrice);
 
     if (!navigator.onLine) {
       enqueueListAction({
@@ -287,36 +290,57 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
     }
   };
 
-  const patchItem = async (
-    itemId: string,
-    patch: { quantity?: number; unit_price?: number | null; checked?: boolean }
-  ) => {
-    applyOptimisticPatch(itemId, patch);
-    if (!navigator.onLine) {
-      enqueueListAction({
-        type: "update",
-        listId: list.id,
-        payload: { itemId, patch },
-      });
-      return;
-    }
-    await updateListItem(itemId, list.id, patch);
-    void refresh();
-  };
+  const listIdRef = useRef(list.id);
+  listIdRef.current = list.id;
 
-  const removeItem = async (itemId: string) => {
-    applyOptimisticRemove(itemId);
-    if (!navigator.onLine) {
-      enqueueListAction({
-        type: "remove",
-        listId: list.id,
-        payload: { itemId },
-      });
-      return;
-    }
-    await removeListItem(itemId, list.id);
-    void refresh();
-  };
+  const persistItemPatch = useCallback(
+    async (itemId: string, patch: { quantity?: number; unit_price?: number | null; checked?: boolean }) => {
+      await updateListItem(itemId, listIdRef.current, patch);
+      clearDirtyPatch(itemId);
+    },
+    [clearDirtyPatch]
+  );
+
+  const { schedule: scheduleItemPatch } = useDebouncedItemPatch({
+    onPersist: persistItemPatch,
+    onPersistError: () => void refresh(),
+  });
+
+  const patchItem = useCallback(
+    (
+      itemId: string,
+      patch: { quantity?: number; unit_price?: number | null; checked?: boolean }
+    ) => {
+      applyOptimisticPatch(itemId, patch);
+      if (!navigator.onLine) {
+        enqueueListAction({
+          type: "update",
+          listId: list.id,
+          payload: { itemId, patch },
+        });
+        return;
+      }
+      scheduleItemPatch(itemId, patch);
+    },
+    [applyOptimisticPatch, list.id, scheduleItemPatch]
+  );
+
+  const removeItem = useCallback(
+    async (itemId: string) => {
+      applyOptimisticRemove(itemId);
+      if (!navigator.onLine) {
+        enqueueListAction({
+          type: "remove",
+          listId: list.id,
+          payload: { itemId },
+        });
+        return;
+      }
+      await removeListItem(itemId, list.id);
+      void refresh();
+    },
+    [applyOptimisticRemove, list.id, refresh]
+  );
 
   const filtered = useMemo(() => {
     let rows = [...items];
@@ -350,8 +374,11 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
           brand: p.brand,
           unit: p.unit,
           category_id: p.category_id,
+          package_size: p.package_size,
+          image_url: p.image_url,
         },
         1,
+        p.last_price ?? null,
         p.last_price ?? null
       );
     }
@@ -393,8 +420,56 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
     [items]
   );
 
+  const categoryById = useMemo(
+    () => new Map(categories.map((c) => [c.id, c])),
+    [categories]
+  );
+
+  const pricedCount = useMemo(
+    () => items.filter((i) => i.unit_price != null).length,
+    [items]
+  );
+
+  const groupedFiltered = useMemo(() => {
+    if (shopMode || listCategoryFilter) return null;
+
+    const groupMap = new Map<string, ListItemRowExt[]>();
+    for (const item of filtered) {
+      const key = item.product?.category_id ?? "__none__";
+      if (!groupMap.has(key)) groupMap.set(key, []);
+      groupMap.get(key)!.push(item);
+    }
+
+    return Array.from(groupMap.entries()).sort(([a], [b]) => {
+      if (a === "__none__") return 1;
+      if (b === "__none__") return -1;
+      const orderA = categoryById.get(a)?.display_order ?? 999;
+      const orderB = categoryById.get(b)?.display_order ?? 999;
+      if (orderA !== orderB) return orderA - orderB;
+      return (categoryById.get(a)?.name ?? "").localeCompare(categoryById.get(b)?.name ?? "");
+    });
+  }, [filtered, shopMode, listCategoryFilter, categoryById]);
+
+  const renderItemCard = (item: ListItemRowExt) => {
+    const cat = item.product?.category_id
+      ? categoryById.get(item.product.category_id)
+      : undefined;
+    const showCategoryMeta = groupedFiltered == null;
+    return (
+      <ListItemCard
+        key={item.id}
+        item={item}
+        shopMode={shopMode}
+        categoryIcon={cat?.icon}
+        categoryName={showCategoryMeta ? cat?.name : undefined}
+        patchItem={patchItem}
+        removeItem={removeItem}
+      />
+    );
+  };
+
   const categoryName = (id: string | null) =>
-    id ? categories.find((c) => c.id === id)?.name : null;
+    id ? categoryById.get(id)?.name ?? null : null;
 
   const showPlanPanel = planMode || (adding && !shopMode);
   const showAddToggle = !planMode && !shopMode;
@@ -423,6 +498,8 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
       {planMode && (
         <PlanListBanner
           itemCount={items.length}
+          pricedCount={pricedCount}
+          estimatedTotal={total}
           suggestionCount={suggestions.filter((s) => !addedProductIds.has(s.id)).length}
           busy={busy}
           onAddSuggestions={() => void handleAddAllSuggestions()}
@@ -611,19 +688,27 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
         }}
       />
 
-      <ul className={shopMode ? "space-y-2" : "space-y-3"}>
-        {filtered.map((item) => (
-          <ListItemCard
-            key={item.id}
-            item={item}
-            shopMode={shopMode}
-            onQuantityChange={(q) => void patchItem(item.id, { quantity: q })}
-            onPriceChange={(p) => void patchItem(item.id, { unit_price: p })}
-            onCheckedChange={(c) => void patchItem(item.id, { checked: c })}
-            onRemove={() => void removeItem(item.id)}
-          />
-        ))}
-      </ul>
+      {groupedFiltered ? (
+        <div className="space-y-4">
+          {groupedFiltered.map(([catKey, groupItems]) => {
+            const cat = catKey === "__none__" ? null : categoryById.get(catKey);
+            return (
+              <section key={catKey}>
+                <h3 className="sticky top-14 z-10 -mx-1 px-1 py-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 bg-[var(--background)]/95 backdrop-blur-sm flex items-center gap-1">
+                  {cat?.icon && <span>{cat.icon}</span>}
+                  {cat?.name ?? "Outros"}
+                  <span className="text-slate-400 font-normal">({groupItems.length})</span>
+                </h3>
+                <ul className="space-y-2 mt-1">{groupItems.map(renderItemCard)}</ul>
+              </section>
+            );
+          })}
+        </div>
+      ) : (
+        <ul className={shopMode ? "space-y-2" : "space-y-3"}>
+          {filtered.map(renderItemCard)}
+        </ul>
+      )}
 
       {filtered.length === 0 && !showPlanPanel && (
         <div className="text-center py-8 space-y-3">

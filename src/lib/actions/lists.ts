@@ -206,8 +206,6 @@ export async function updateListItem(
   if (patch.checked === false) {
     await sql`update list_items set checked = false, checked_by = null where id = ${itemId}`;
   }
-
-  revalidatePath(`/lists/${listId}`);
 }
 
 export async function removeListItem(itemId: string, listId: string) {

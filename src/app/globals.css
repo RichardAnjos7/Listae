@@ -24,3 +24,17 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@layer base {
+  button:not(:disabled),
+  a {
+    transition-property: transform;
+    transition-duration: 100ms;
+    transition-timing-function: ease-out;
+  }
+
+  button:not(:disabled):active,
+  a:active {
+    transform: scale(0.97);
+  }
+}
