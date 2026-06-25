@@ -1,8 +1,11 @@
+"use client";
+
 import type { CommunityInsights } from "@/lib/prices/community-insights";
 import { labelFromRecordedAt } from "@/lib/prices/freshness";
 import { formatBRL } from "@/lib/utils";
-import { Activity, ChevronRight, MapPin } from "lucide-react";
+import { Activity, ChevronRight, MapPin, RefreshCw } from "lucide-react";
 import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 
 type Props = {
   city: string | null;
@@ -14,6 +17,25 @@ function productLabel(name: string, brand: string | null) {
 }
 
 export function DashboardCommunityTeaser({ city, data }: Props) {
+  const [insights, setInsights] = useState(data);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    setInsights(data);
+  }, [data]);
+
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const res = await fetch("/api/city/community", { cache: "no-store" });
+      if (res.ok) setInsights((await res.json()) as CommunityInsights);
+    } catch {
+      /* ignore */
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
   if (!city) {
     return (
       <section className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 p-4 text-sm text-slate-500">
@@ -26,8 +48,8 @@ export function DashboardCommunityTeaser({ city, data }: Props) {
     );
   }
 
-  const live = data?.liveFeed.slice(0, 3) ?? [];
-  const weekCount = data?.stats.week_count ?? 0;
+  const live = insights?.liveFeed.slice(0, 5) ?? [];
+  const weekCount = insights?.stats.week_count ?? 0;
 
   if (weekCount === 0 && live.length === 0) {
     return (
@@ -47,16 +69,31 @@ export function DashboardCommunityTeaser({ city, data }: Props) {
   }
 
   return (
-    <Link
-      href="/prices"
-      className="block rounded-2xl border border-emerald-200/60 dark:border-emerald-900/50 bg-emerald-50/30 dark:bg-emerald-950/20 p-4 shadow-sm hover:border-emerald-400 dark:hover:border-emerald-700 transition-colors"
-    >
+    <section className="rounded-2xl border border-emerald-200/60 dark:border-emerald-900/50 bg-emerald-50/30 dark:bg-emerald-950/20 p-4 shadow-sm">
       <div className="flex items-center justify-between gap-2 mb-2">
-        <h2 className="text-sm font-semibold text-emerald-900 dark:text-emerald-100 flex items-center gap-2">
-          <Activity className="h-4 w-4" />
-          Ao vivo · {city}
+        <h2 className="text-sm font-semibold text-emerald-900 dark:text-emerald-100 flex items-center gap-2 min-w-0">
+          <Activity className="h-4 w-4 shrink-0" />
+          <span className="truncate">Ao vivo · {city}</span>
         </h2>
-        <ChevronRight className="h-4 w-4 text-emerald-600 shrink-0" />
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={refreshing}
+            className="p-1.5 rounded-lg text-emerald-600/80 hover:text-emerald-700 hover:bg-emerald-100/50 dark:hover:bg-emerald-900/30 disabled:opacity-50"
+            aria-label="Atualizar feed da cidade"
+            title="Atualizar"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+          </button>
+          <Link
+            href="/prices"
+            aria-label="Ver feed da cidade"
+            className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-100/50 dark:hover:bg-emerald-900/30"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Link>
+        </div>
       </div>
       {weekCount > 0 && (
         <p className="text-xs text-slate-600 dark:text-slate-300 mb-2">
@@ -85,6 +122,12 @@ export function DashboardCommunityTeaser({ city, data }: Props) {
       ) : (
         <p className="text-xs text-slate-500">Nenhum registro recente.</p>
       )}
-    </Link>
+      <Link
+        href="/prices"
+        className="block text-center text-xs text-emerald-600 font-medium mt-2.5"
+      >
+        Ver feed completo →
+      </Link>
+    </section>
   );
 }

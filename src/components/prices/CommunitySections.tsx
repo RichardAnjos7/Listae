@@ -1,5 +1,6 @@
 "use client";
 
+import { LiveFeedModal } from "@/components/prices/LiveFeedModal";
 import type { CommunityInsights } from "@/lib/prices/community-insights";
 import { labelFromRecordedAt } from "@/lib/prices/freshness";
 import { formatBRL } from "@/lib/utils";
@@ -8,6 +9,7 @@ import {
   ArrowDownRight,
   Bell,
   Flame,
+  Maximize2,
   ShoppingCart,
   Store,
   TrendingDown,
@@ -15,6 +17,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 
 type Props = {
   city: string | null;
@@ -37,6 +40,7 @@ export function CommunitySections({
 }: Props) {
   const { stats, liveFeed, heatMap, basketRanking, alerts, comparableBasket, trend7d, activeShoppers } =
     data;
+  const [feedOpen, setFeedOpen] = useState(false);
 
   const hasCommunity = stats.week_count > 0;
 
@@ -82,46 +86,73 @@ export function CommunitySections({
               <Activity className="h-4 w-4 shrink-0" />
               <span className="truncate">Ao vivo na cidade</span>
             </h2>
-            {onRefresh && (
-              <button
-                type="button"
-                onClick={onRefresh}
-                disabled={refreshing}
-                className="shrink-0 p-1.5 rounded-lg text-emerald-600/80 hover:text-emerald-700 hover:bg-emerald-100/50 dark:hover:bg-emerald-900/30 disabled:opacity-50"
-                aria-label="Atualizar feed da cidade"
-                title="Atualizar"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-              </button>
-            )}
-          </div>
-          <div className="max-h-48 overflow-y-auto overscroll-y-contain -mx-1 px-1">
-            <ul className="space-y-1.5 text-sm pr-3">
-              {(compact ? liveFeed.slice(0, 5) : liveFeed).map((item) => (
-                <li
-                  key={item.id}
-                  className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-2 py-1 border-b border-emerald-200/40 last:border-0"
+            <div className="flex items-center gap-1 shrink-0">
+              {onRefresh && (
+                <button
+                  type="button"
+                  onClick={onRefresh}
+                  disabled={refreshing}
+                  className="p-1.5 rounded-lg text-emerald-600/80 hover:text-emerald-700 hover:bg-emerald-100/50 dark:hover:bg-emerald-900/30 disabled:opacity-50"
+                  aria-label="Atualizar feed da cidade"
+                  title="Atualizar"
                 >
-                  <span className="min-w-0 truncate text-slate-800 dark:text-slate-200">
-                    <span className="text-[10px] text-slate-400 mr-1">
-                      {labelFromRecordedAt(item.recorded_at)}
-                    </span>
-                    {productLabel(item.product_name, item.brand)} — {item.store_name}
-                  </span>
-                  <span className="text-right font-semibold text-emerald-700 dark:text-emerald-400 tabular-nums">
-                    {formatBRL(item.unit_price)}
-                  </span>
-                </li>
-              ))}
-            </ul>
+                  <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+                </button>
+              )}
+              {!compact && liveFeed.length > 5 && (
+                <button
+                  type="button"
+                  onClick={() => setFeedOpen(true)}
+                  className="p-1.5 rounded-lg text-emerald-600/80 hover:text-emerald-700 hover:bg-emerald-100/50 dark:hover:bg-emerald-900/30"
+                  aria-label="Ver feed completo"
+                  title="Ver feed completo"
+                >
+                  <Maximize2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           </div>
+          <ul className="space-y-1.5 text-sm">
+            {liveFeed.slice(0, 5).map((item) => (
+              <li
+                key={item.id}
+                className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-2 py-1 border-b border-emerald-200/40 last:border-0"
+              >
+                <span className="min-w-0 truncate text-slate-800 dark:text-slate-200">
+                  <span className="text-[10px] text-slate-400 mr-1">
+                    {labelFromRecordedAt(item.recorded_at)}
+                  </span>
+                  {productLabel(item.product_name, item.brand)} — {item.store_name}
+                </span>
+                <span className="text-right font-semibold text-emerald-700 dark:text-emerald-400 tabular-nums">
+                  {formatBRL(item.unit_price)}
+                </span>
+              </li>
+            ))}
+          </ul>
           {compact && liveFeed.length > 5 && (
             <Link href="/prices" className="block text-center text-xs text-emerald-600 font-medium mt-2">
               Ver feed completo →
             </Link>
           )}
+          {!compact && liveFeed.length > 5 && (
+            <button
+              type="button"
+              onClick={() => setFeedOpen(true)}
+              className="block w-full text-center text-xs text-emerald-600 font-medium mt-2"
+            >
+              Ver todos os {liveFeed.length} preços →
+            </button>
+          )}
         </section>
       )}
+
+      <LiveFeedModal
+        open={feedOpen}
+        city={city}
+        items={liveFeed}
+        onClose={() => setFeedOpen(false)}
+      />
 
       {heatMap.length > 0 && !compact && (
         <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
