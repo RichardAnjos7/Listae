@@ -7,6 +7,7 @@ import { EditProfileDialog } from "./EditProfileDialog";
 
 type Props = {
   name: string;
+  avatarUrl?: string | null;
   city: string | null;
   neighborhood: string | null;
 };
@@ -18,10 +19,12 @@ function getInitials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-export function ProfileHeader({ name, city, neighborhood }: Props) {
+export function ProfileHeader({ name, avatarUrl, city, neighborhood }: Props) {
   const [open, setOpen] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const displayName = name || "Você";
   const location = [neighborhood, city].filter(Boolean).join(" · ");
+  const showAvatar = Boolean(avatarUrl) && !imgError;
 
   return (
     <div className="space-y-4">
@@ -30,9 +33,20 @@ export function ProfileHeader({ name, city, neighborhood }: Props) {
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Editar perfil"
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-lg font-semibold text-emerald-700 dark:text-emerald-300"
+          className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-lg font-semibold text-emerald-700 dark:text-emerald-300"
         >
-          {getInitials(displayName)}
+          {showAvatar ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={avatarUrl as string}
+              alt={displayName}
+              referrerPolicy="no-referrer"
+              onError={() => setImgError(true)}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            getInitials(displayName)
+          )}
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">

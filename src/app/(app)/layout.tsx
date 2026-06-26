@@ -2,6 +2,7 @@ import { AppBadgeSync } from "@/components/AppBadgeSync";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { signOut } from "@/lib/actions/auth";
+import { getProfile } from "@/lib/actions/profile";
 import { getSessionUserId } from "@/lib/auth/session";
 import { getUnreadInboxCount } from "@/lib/notifications/inbox";
 import { Bell, LogOut, User } from "lucide-react";
@@ -11,8 +12,14 @@ export default async function AppShellLayout({ children }: { children: React.Rea
   const hasDbEnv = Boolean(process.env.DATABASE_URL) && Boolean(process.env.AUTH_SECRET);
   const userId = hasDbEnv ? await getSessionUserId() : null;
   let alertBadge = 0;
+  let avatarUrl: string | null = null;
   if (userId && hasDbEnv) {
-    alertBadge = await getUnreadInboxCount(userId);
+    const [count, profile] = await Promise.all([
+      getUnreadInboxCount(userId),
+      getProfile(userId),
+    ]);
+    alertBadge = count;
+    avatarUrl = profile?.avatar_url ?? null;
   }
 
   return (
@@ -25,10 +32,10 @@ export default async function AppShellLayout({ children }: { children: React.Rea
           <div className="flex items-center gap-3">
             <Link
               href="/alerts"
-              className="relative flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              aria-label="Notificações"
+              className="relative flex items-center text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
             >
-              <Bell className="h-3.5 w-3.5" />
-              Notificações
+              <Bell className="h-4 w-4" />
               {alertBadge > 0 && (
                 <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] rounded-full bg-amber-500 text-[9px] text-white flex items-center justify-center px-0.5">
                   {alertBadge > 9 ? "9+" : alertBadge}
@@ -37,18 +44,28 @@ export default async function AppShellLayout({ children }: { children: React.Rea
             </Link>
             <Link
               href="/profile"
-              className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              aria-label="Perfil"
+              className="flex items-center text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
             >
-              <User className="h-3.5 w-3.5" />
-              Perfil
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={avatarUrl}
+                  alt="Perfil"
+                  referrerPolicy="no-referrer"
+                  className="h-6 w-6 rounded-full object-cover"
+                />
+              ) : (
+                <User className="h-4 w-4" />
+              )}
             </Link>
             <form action={signOut}>
               <button
                 type="submit"
-                className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                aria-label="Sair"
+                className="flex items-center text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               >
-                <LogOut className="h-3.5 w-3.5" />
-                Sair
+                <LogOut className="h-4 w-4" />
               </button>
             </form>
           </div>

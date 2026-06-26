@@ -51,6 +51,6 @@ export function getOAuthOrigin(request: NextRequest): string {
 
 /** URI exata para cadastrar no Google Cloud (documentação / debug). */
 export function getCanonicalOAuthRedirectUri(): string {
-  const origin = getAppOriginFromEnv() ?? "https://ilista.anjostecnologia.com.br";
+  const origin = getAppOriginFromEnv() ?? "https://www.listae.anjostecnologia.com.br";
   return `${normalizeOrigin(origin)}/api/auth/google/callback`;
 }

@@ -22,6 +22,7 @@ export default async function ProfilePage() {
     <div className="space-y-6 pb-4">
       <ProfileHeader
         name={profile?.name ?? ""}
+        avatarUrl={profile?.avatar_url ?? null}
         city={profile?.city ?? null}
         neighborhood={profile?.neighborhood ?? null}
       />

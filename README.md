@@ -23,18 +23,18 @@ O erro **400: redirect_uri_mismatch** significa que a URI de callback do app nã
 1. Acesse [Google Cloud Console → Credenciais](https://console.cloud.google.com/apis/credentials).
 2. Abra o cliente OAuth **Aplicativo da Web** usado pelo Listaê.
 3. Em **Origens JavaScript autorizadas**, adicione:
-   - `https://ilista.anjostecnologia.com.br`
+   - `https://www.listae.anjostecnologia.com.br`
 4. Em **URIs de redirecionamento autorizados**, adicione **exatamente** (sem barra no final):
-   - `https://ilista.anjostecnologia.com.br/api/auth/google/callback`
+   - `https://www.listae.anjostecnologia.com.br/api/auth/google/callback`
 5. Para desenvolvimento local, inclua também:
    - `http://localhost:5175`
    - `http://localhost:5175/api/auth/google/callback`
 6. No servidor de produção (Vercel/Render/etc.), defina:
-   - `APP_URL=https://ilista.anjostecnologia.com.br`
+   - `APP_URL=https://www.listae.anjostecnologia.com.br`
    - (opcional) `NEXT_PUBLIC_APP_URL` com o mesmo valor
 7. Confirme que `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` no painel do host são os **mesmos** do cliente OAuth acima.
-8. Abra `https://ilista.anjostecnologia.com.br/api/auth/google/setup` e confira se `redirect_uri_used` é **igual** à URI cadastrada no Google.
-9. Se o site abrir com `www.`, cadastre **também** `https://www.ilista.anjostecnologia.com.br/api/auth/google/callback`.
+8. Abra `https://www.listae.anjostecnologia.com.br/api/auth/google/setup` e confira se `redirect_uri_used` é **igual** à URI cadastrada no Google.
+9. Sem o `www.`, cadastre **também** `https://listae.anjostecnologia.com.br/api/auth/google/callback`.
 
 Salve no Google Cloud e aguarde ~1 minuto antes de testar de novo.
 

@@ -32,8 +32,8 @@ export async function GET(request: NextRequest) {
     checklist: [
       "Cliente OAuth tipo Aplicativo da Web",
       "redirect_uri deve ser IDÊNTICO (https, domínio, path, sem barra final)",
-      "APP_URL=https://ilista.anjostecnologia.com.br no painel de deploy",
-      "Se usar www, cadastre também https://www.ilista.anjostecnologia.com.br/api/auth/google/callback",
+      "APP_URL=https://www.listae.anjostecnologia.com.br no painel de deploy",
+      "Sem www, cadastre também https://listae.anjostecnologia.com.br/api/auth/google/callback",
     ],
   });
 }
