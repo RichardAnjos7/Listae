@@ -3,7 +3,11 @@ import withPWAInit from "@ducanh2912/next-pwa";
 
 const withPWA = withPWAInit({
   dest: "public",
-  disable: process.env.NODE_ENV === "development",
+  // Em dev o PWA fica desativado por padrão (evita cache atrapalhar o HMR).
+  // Para testar push no localhost, defina NEXT_PUBLIC_ENABLE_PWA_DEV=true no .env.local.
+  disable:
+    process.env.NODE_ENV === "development" &&
+    process.env.NEXT_PUBLIC_ENABLE_PWA_DEV !== "true",
   cacheOnFrontEndNav: false,
   aggressiveFrontEndNavCaching: false,
   reloadOnOnline: true,
@@ -33,6 +37,10 @@ const nextConfig: NextConfig = {
       },
       {
         source: "/swe-worker-:hash.js",
+        headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }],
+      },
+      {
+        source: "/worker-:hash.js",
         headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }],
       },
       {

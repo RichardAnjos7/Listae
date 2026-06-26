@@ -14,7 +14,16 @@ export default async function JoinListPage({ params }: PageProps) {
   if (userId) {
     let listId: string;
     try {
-      listId = await joinListByCode(userId, code);
+      const result = await joinListByCode(userId, code);
+      listId = result.listId;
+      if (result.isNew) {
+        try {
+          const { notifyListActivity } = await import("@/lib/push/notify");
+          await notifyListActivity(listId, userId, { kind: "joined" });
+        } catch {
+          /* push best-effort */
+        }
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Não foi possível entrar na lista.";
       return (

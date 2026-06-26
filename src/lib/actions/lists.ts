@@ -15,6 +15,20 @@ import { customAlphabet } from "nanoid";
 
 const shareCode = customAlphabet("23456789ABCDEFGHJKLMNPQRSTUVWXYZ", 8);
 
+async function pushListActivity(
+  listId: string,
+  actorId: string,
+  activity: import("@/lib/push/notify").ListActivity,
+  dedupeKey?: string
+): Promise<void> {
+  try {
+    const { notifyListActivity } = await import("@/lib/push/notify");
+    await notifyListActivity(listId, actorId, activity, dedupeKey ? { dedupeKey } : undefined);
+  } catch {
+    /* push é best-effort; nunca bloqueia a ação na lista */
+  }
+}
+
 export async function getSuggestedUnitPrice(
   productId: string,
   supermarketId: string | null
@@ -94,11 +108,18 @@ export async function ensureShareCode(listId: string) {
   const rows = await sql`
     select share_code from shopping_lists where id = ${listId} limit 1
   `;
-  if (rows[0]?.share_code) return rows[0].share_code as string;
+  let code = rows[0]?.share_code as string | undefined;
 
-  const code = shareCode();
-  await sql`update shopping_lists set share_code = ${code} where id = ${listId}`;
-  revalidatePath(`/lists/${listId}`);
+  if (!code) {
+    code = shareCode();
+    await sql`update shopping_lists set share_code = ${code} where id = ${listId}`;
+    revalidatePath(`/lists/${listId}`);
+  }
+
+  // Avisa os colaboradores atuais que um convite foi compartilhado (1x/dia/lista).
+  const dayKey = new Date().toISOString().slice(0, 10);
+  await pushListActivity(listId, userId, { kind: "shared" }, `list-share:${listId}:${dayKey}`);
+
   return code;
 }
 
@@ -151,6 +172,12 @@ export async function addListItem(
   revalidatePath(`/lists/${listId}`);
   const item = await fetchSingleListItem(itemId);
   if (!item) throw new Error("Item não encontrado após adicionar");
+
+  await pushListActivity(listId, userId, {
+    kind: "added",
+    productName: item.product?.name ?? "um item",
+  });
+
   return { item, merged };
 }
 
@@ -200,6 +227,11 @@ export async function addListItemsBatch(
   }
 
   revalidatePath(`/lists/${listId}`);
+
+  if (added > 0) {
+    await pushListActivity(listId, userId, { kind: "added_many", count: added });
+  }
+
   return { added, skipped };
 }
 
@@ -220,6 +252,17 @@ export async function updateListItem(
   }
   if (patch.checked === true) {
     await sql`update list_items set checked = true, checked_by = ${userId} where id = ${itemId}`;
+    const nameRows = await sql`
+      select p.name
+      from list_items li
+      join products p on p.id = li.product_id
+      where li.id = ${itemId}
+      limit 1
+    `;
+    await pushListActivity(listId, userId, {
+      kind: "checked",
+      productName: (nameRows[0]?.name as string) ?? "um item",
+    });
   }
   if (patch.checked === false) {
     await sql`update list_items set checked = false, checked_by = null where id = ${itemId}`;
@@ -377,6 +420,8 @@ export async function completeList(listId: string) {
     });
   }
 
+  await pushListActivity(listId, userId, { kind: "completed", total: listTotal });
+
   revalidatePath("/lists");
   revalidatePath("/");
   revalidatePath("/history");
@@ -411,7 +456,10 @@ export async function deleteListFromForm(formData: FormData) {
 
 export async function joinListByCodeAction(code: string) {
   const userId = await requireUserId();
-  const listId = await joinListByCode(userId, code);
+  const { listId, isNew } = await joinListByCode(userId, code);
+  if (isNew) {
+    await pushListActivity(listId, userId, { kind: "joined" });
+  }
   revalidatePath("/lists");
   return listId;
 }

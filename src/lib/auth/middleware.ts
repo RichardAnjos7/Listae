@@ -34,6 +34,7 @@ export async function updateSession(request: NextRequest) {
     path === "/sw.js" ||
     path.startsWith("/workbox-") ||
     path.startsWith("/swe-worker") ||
+    path.startsWith("/worker-") ||
     path.startsWith("/fallback-");
 
   if (!userId && !isPublicRoute && !isPublicAsset) {

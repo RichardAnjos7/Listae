@@ -1,5 +1,8 @@
+import { NotificationPreferences } from "@/components/settings/NotificationPreferences";
+import { PushNotificationsToggle } from "@/components/settings/PushNotificationsToggle";
 import { getProfile, updateProfile } from "@/lib/actions/profile";
 import { getSessionUserId } from "@/lib/auth/session";
+import { getNotificationContext } from "@/lib/notifications/preferences";
 import Link from "next/link";
 import { MapPin, User } from "lucide-react";
 
@@ -12,7 +15,10 @@ export default async function ProfilePage({
   if (!userId) return null;
 
   const { saved } = await searchParams;
-  const profile = await getProfile(userId);
+  const [profile, notificationCtx] = await Promise.all([
+    getProfile(userId),
+    getNotificationContext(userId),
+  ]);
 
   async function saveAction(formData: FormData) {
     "use server";
@@ -97,6 +103,13 @@ export default async function ProfilePage({
           Salvar
         </button>
       </form>
+
+      <PushNotificationsToggle />
+
+      <NotificationPreferences
+        initial={notificationCtx.prefs}
+        initialQuiet={notificationCtx.quiet}
+      />
 
       <p className="text-xs text-slate-500 text-center">
         <Link href="/" className="text-emerald-600 font-medium">

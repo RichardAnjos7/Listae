@@ -60,6 +60,9 @@ export async function recordPriceObservation(input: RecordObservationInput): Pro
   `;
 
   if (status === "verified") {
+    const nowRows = await sql`select now() as ts`;
+    const since = nowRows[0]?.ts as string;
+
     await sql`
       select public.evaluate_price_alerts(
         ${productId}::uuid,
@@ -67,6 +70,13 @@ export async function recordPriceObservation(input: RecordObservationInput): Pro
         ${city}
       )
     `;
+
+    try {
+      const { notifyNewPriceAlerts } = await import("@/lib/push/notify");
+      await notifyNewPriceAlerts(productId, since);
+    } catch {
+      /* push é best-effort; não bloqueia a observação de preço */
+    }
   }
 
   return status;
