@@ -19,12 +19,23 @@ import {
 import Link from "next/link";
 import { useState } from "react";
 
+export type CommunitySection =
+  | "header"
+  | "live"
+  | "heat"
+  | "basket"
+  | "alerts"
+  | "comparable"
+  | "trend";
+
 type Props = {
   city: string | null;
   data: CommunityInsights;
   compact?: boolean;
   onRefresh?: () => void;
   refreshing?: boolean;
+  /** Quando informado, renderiza apenas estas seções (na ordem do JSX). */
+  sections?: CommunitySection[];
 };
 
 function productLabel(name: string, brand: string | null) {
@@ -37,14 +48,18 @@ export function CommunitySections({
   compact = false,
   onRefresh,
   refreshing = false,
+  sections,
 }: Props) {
   const { stats, liveFeed, heatMap, basketRanking, alerts, comparableBasket, trend7d, activeShoppers } =
     data;
   const [feedOpen, setFeedOpen] = useState(false);
 
+  const show = (key: CommunitySection) => !sections || sections.includes(key);
+
   const hasCommunity = stats.week_count > 0;
 
   if (!hasCommunity && !city) {
+    if (!show("header")) return null;
     return (
       <section className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 p-6 text-center text-sm text-slate-500">
         <Link href="/profile" className="text-emerald-600 font-medium">
@@ -58,8 +73,21 @@ export function CommunitySections({
   const trendMin = trend7d.length ? Math.min(...trend7d.map((d) => d.avg_price)) : 0;
   const trendMax = trend7d.length ? Math.max(...trend7d.map((d) => d.avg_price)) : 1;
 
+  const blocks = {
+    header: show("header"),
+    live: show("live") && liveFeed.length > 0,
+    heat: show("heat") && heatMap.length > 0 && !compact,
+    basket: show("basket") && basketRanking.length > 0,
+    alerts: show("alerts") && alerts.length > 0,
+    comparable: show("comparable") && comparableBasket.length > 0 && !compact,
+    trend: show("trend") && trend7d.length > 1 && !compact,
+  };
+
+  if (!Object.values(blocks).some(Boolean)) return null;
+
   return (
     <div className="space-y-4">
+      {blocks.header && (
       <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
         <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2 mb-2">
           <Users className="h-4 w-4 text-emerald-600" />
@@ -78,8 +106,9 @@ export function CommunitySections({
           </p>
         )}
       </section>
+      )}
 
-      {liveFeed.length > 0 && (
+      {blocks.live && (
         <section className="rounded-2xl border border-emerald-200/60 dark:border-emerald-900/50 bg-emerald-50/30 dark:bg-emerald-950/20 p-4 shadow-sm">
           <div className="flex items-center justify-between gap-2 mb-2">
             <h2 className="text-sm font-semibold text-emerald-900 dark:text-emerald-100 flex items-center gap-2 min-w-0">
@@ -147,14 +176,16 @@ export function CommunitySections({
         </section>
       )}
 
-      <LiveFeedModal
-        open={feedOpen}
-        city={city}
-        items={liveFeed}
-        onClose={() => setFeedOpen(false)}
-      />
+      {blocks.live && (
+        <LiveFeedModal
+          open={feedOpen}
+          city={city}
+          items={liveFeed}
+          onClose={() => setFeedOpen(false)}
+        />
+      )}
 
-      {heatMap.length > 0 && !compact && (
+      {blocks.heat && (
         <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2 mb-2">
             <Flame className="h-4 w-4 text-orange-500" />
@@ -176,7 +207,7 @@ export function CommunitySections({
         </section>
       )}
 
-      {basketRanking.length > 0 && (
+      {blocks.basket && (
         <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2 mb-2">
             <Store className="h-4 w-4 text-emerald-600" />
@@ -202,7 +233,7 @@ export function CommunitySections({
         </section>
       )}
 
-      {alerts.length > 0 && (
+      {blocks.alerts && (
         <section className="rounded-2xl border border-amber-200/80 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 p-4 shadow-sm">
           <h2 className="text-sm font-semibold text-amber-900 dark:text-amber-200 flex items-center gap-2 mb-2">
             <Bell className="h-4 w-4" />
@@ -224,7 +255,7 @@ export function CommunitySections({
         </section>
       )}
 
-      {comparableBasket.length > 0 && !compact && (
+      {blocks.comparable && (
         <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2">
             Cesta comparável (15 produtos)
@@ -247,7 +278,7 @@ export function CommunitySections({
         </section>
       )}
 
-      {trend7d.length > 1 && !compact && (
+      {blocks.trend && (
         <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2 mb-3">
             <TrendingDown className="h-4 w-4" />

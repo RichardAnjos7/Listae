@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { Bell, BellOff, BellRing, Loader2 } from "lucide-react";
 
-type State = "loading" | "unsupported" | "default" | "denied" | "subscribed" | "working";
+export type PushState =
+  | "loading"
+  | "unsupported"
+  | "default"
+  | "denied"
+  | "subscribed"
+  | "working";
+
+type State = PushState;
 
 type NavigatorWithBadge = Navigator & {
   clearAppBadge?: () => Promise<void>;
@@ -36,10 +44,18 @@ async function getReadyRegistration(
   ]);
 }
 
-export function PushNotificationsToggle() {
+export function PushNotificationsToggle({
+  onStateChange,
+}: {
+  onStateChange?: (state: PushState) => void;
+} = {}) {
   const [state, setState] = useState<State>("loading");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+
+  useEffect(() => {
+    onStateChange?.(state);
+  }, [state, onStateChange]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

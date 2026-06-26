@@ -1,115 +1,67 @@
-import { NotificationPreferences } from "@/components/settings/NotificationPreferences";
-import { PushNotificationsToggle } from "@/components/settings/PushNotificationsToggle";
-import { getProfile, updateProfile } from "@/lib/actions/profile";
+import { InstallAppButton } from "@/components/settings/InstallAppButton";
+import { NotificationsCard } from "@/components/settings/NotificationsCard";
+import { ProfileHeader } from "@/components/settings/ProfileHeader";
+import { ThemeToggle } from "@/components/settings/ThemeToggle";
+import { signOut } from "@/lib/actions/auth";
+import { getProfile } from "@/lib/actions/profile";
 import { getSessionUserId } from "@/lib/auth/session";
 import { getNotificationContext } from "@/lib/notifications/preferences";
 import Link from "next/link";
-import { MapPin, User } from "lucide-react";
+import { LogOut } from "lucide-react";
 
-export default async function ProfilePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ saved?: string }>;
-}) {
+export default async function ProfilePage() {
   const userId = await getSessionUserId();
   if (!userId) return null;
 
-  const { saved } = await searchParams;
   const [profile, notificationCtx] = await Promise.all([
     getProfile(userId),
     getNotificationContext(userId),
   ]);
 
-  async function saveAction(formData: FormData) {
-    "use server";
-    await updateProfile(formData);
-    const { redirect } = await import("next/navigation");
-    redirect("/profile?saved=1");
-  }
-
   return (
-    <div className="space-y-4 pb-4">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-          <User className="h-5 w-5 text-emerald-600" />
-          Perfil
-        </h1>
-        <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
-          Cidade e bairro filtram preços compartilhados e comparação de cesta.
-        </p>
-      </div>
+    <div className="space-y-6 pb-4">
+      <ProfileHeader
+        name={profile?.name ?? ""}
+        city={profile?.city ?? null}
+        neighborhood={profile?.neighborhood ?? null}
+      />
 
-      {saved === "1" && (
-        <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/80 dark:bg-emerald-950/40 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-200">
-          Perfil salvo com sucesso.
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Aparência</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Escolha o tema do aplicativo.
+          </p>
         </div>
-      )}
 
-      {!profile?.city && (
-        <div className="rounded-xl border border-amber-300/70 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
-          <MapPin className="h-3.5 w-3.5 inline mr-1" />
-          Defina sua cidade para ver preços relevantes na aba{" "}
-          <Link href="/prices" className="font-semibold underline">
-            Preços
-          </Link>
-          .
-        </div>
-      )}
+        <ThemeToggle />
+      </section>
 
-      <form
-        action={saveAction}
-        className="space-y-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm"
-      >
+      <section className="space-y-3">
         <div>
-          <label htmlFor="name" className="text-xs font-medium text-slate-600 dark:text-slate-400">
-            Nome
-          </label>
-          <input
-            id="name"
-            name="name"
-            required
-            defaultValue={profile?.name ?? ""}
-            className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm"
-          />
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Notificações</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Controle o que e quando você recebe alertas.
+          </p>
         </div>
-        <div>
-          <label htmlFor="city" className="text-xs font-medium text-slate-600 dark:text-slate-400">
-            Cidade
-          </label>
-          <input
-            id="city"
-            name="city"
-            placeholder="Ex.: Manaus"
-            defaultValue={profile?.city ?? ""}
-            className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm"
-          />
-        </div>
-        <div>
-          <label htmlFor="neighborhood" className="text-xs font-medium text-slate-600 dark:text-slate-400">
-            Bairro (opcional)
-          </label>
-          <input
-            id="neighborhood"
-            name="neighborhood"
-            placeholder="Ex.: Adrianópolis"
-            defaultValue={profile?.neighborhood ?? ""}
-            className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm"
-          />
-        </div>
+
+        <NotificationsCard
+          initial={notificationCtx.prefs}
+          initialQuiet={notificationCtx.quiet}
+        />
+      </section>
+
+      <InstallAppButton />
+
+      <form action={signOut}>
         <button
           type="submit"
-          className="w-full rounded-xl bg-emerald-600 text-white font-medium py-2.5 text-sm hover:bg-emerald-700"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
         >
-          Salvar
+          <LogOut className="h-4 w-4" />
+          Sair da conta
         </button>
       </form>
-
-      <PushNotificationsToggle />
-
-      <NotificationPreferences
-        initial={notificationCtx.prefs}
-        initialQuiet={notificationCtx.quiet}
-      />
 
       <p className="text-xs text-slate-500 text-center">
         <Link href="/" className="text-emerald-600 font-medium">

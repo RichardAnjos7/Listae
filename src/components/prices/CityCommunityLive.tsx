@@ -1,6 +1,6 @@
 "use client";
 
-import { CommunitySections } from "@/components/prices/CommunitySections";
+import { CommunitySections, type CommunitySection } from "@/components/prices/CommunitySections";
 import type { CommunityInsights } from "@/lib/prices/community-insights";
 import { normalizeSinceParam } from "@/lib/prices/community-insights";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -16,9 +16,10 @@ type Props = {
   city: string | null;
   initialData: CommunityInsights;
   compact?: boolean;
+  sections?: CommunitySection[];
 };
 
-export function CityCommunityLive({ city, initialData, compact = false }: Props) {
+export function CityCommunityLive({ city, initialData, compact = false, sections }: Props) {
   const [data, setData] = useState(initialData);
   const [refreshing, setRefreshing] = useState(false);
   const lastSeenRef = useRef<string | null>(
@@ -80,6 +81,7 @@ export function CityCommunityLive({ city, initialData, compact = false }: Props)
       compact={compact}
       onRefresh={refresh}
       refreshing={refreshing}
+      sections={sections}
     />
   );
 }

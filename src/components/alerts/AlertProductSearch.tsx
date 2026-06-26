@@ -8,8 +8,8 @@ type Hit = { id: string; name: string; brand: string | null; package_size: strin
 export function AlertProductSearch({
   onSelect,
 }: {
-  onSelect: (product: { id: string; name: string }) => void;
-}) {
+  onSelect?: (product: { id: string; name: string }) => void;
+} = {}) {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<Hit[]>([]);
   const [selected, setSelected] = useState<{ id: string; name: string } | null>(null);
@@ -58,7 +58,7 @@ export function AlertProductSearch({
                   setSelected({ id: p.id, name: p.name });
                   setQuery(p.name);
                   setHits([]);
-                  onSelect({ id: p.id, name: p.name });
+                  onSelect?.({ id: p.id, name: p.name });
                 }}
                 className="w-full text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800"
               >

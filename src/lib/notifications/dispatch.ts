@@ -1,4 +1,5 @@
 import { getSql } from "@/lib/db";
+import { recordNotification } from "@/lib/notifications/inbox";
 import {
   getNotificationContext,
   isWithinQuietHours,
@@ -30,7 +31,6 @@ export async function dispatchPush({
 }: DispatchOptions): Promise<number> {
   const { prefs, quiet } = await getNotificationContext(userId);
   if (!prefs[type]) return 0;
-  if (isWithinQuietHours(quiet)) return 0;
 
   if (dedupeKey) {
     const sql = getSql();
@@ -46,6 +46,21 @@ export async function dispatchPush({
       // Se o log falhar, seguimos enviando (melhor entregar do que perder).
     }
   }
+
+  // Registra na central in-app (exceto alertas de preço, que já são
+  // persistidos em price_alert_notifications). Feito antes do silêncio:
+  // o horário de silêncio suprime só o push, não o item no inbox.
+  if (type !== "price_alert") {
+    await recordNotification({
+      userId,
+      type,
+      title: payload.title,
+      body: payload.body,
+      url: payload.url ?? null,
+    });
+  }
+
+  if (isWithinQuietHours(quiet)) return 0;
 
   return sendPushToUser(userId, payload);
 }

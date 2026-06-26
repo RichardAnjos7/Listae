@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { BellOff } from "lucide-react";
 import { setNotificationPreference, setQuietHours } from "@/lib/actions/notifications";
 import type {
   NotificationPreferences as Prefs,
@@ -44,11 +45,13 @@ const ITEMS: { type: NotificationType; label: string; description: string }[] = 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 function Toggle({
+  id,
   checked,
   busy,
   onClick,
   label,
 }: {
+  id?: string;
   checked: boolean;
   busy: boolean;
   onClick: () => void;
@@ -56,6 +59,7 @@ function Toggle({
 }) {
   return (
     <button
+      id={id}
       type="button"
       role="switch"
       aria-checked={checked}
@@ -78,9 +82,11 @@ function Toggle({
 export function NotificationPreferences({
   initial,
   initialQuiet,
+  pushActive = true,
 }: {
   initial: Prefs;
   initialQuiet: QuietHours;
+  pushActive?: boolean;
 }) {
   const [prefs, setPrefs] = useState<Prefs>(initial);
   const [quiet, setQuiet] = useState<QuietHours>(initialQuiet);
@@ -121,80 +127,93 @@ export function NotificationPreferences({
   };
 
   return (
-    <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-1">
+    <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
       <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2">
         Tipos de notificação
       </h2>
-      <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-        {ITEMS.map((item) => (
-          <li key={item.type} className="flex items-start justify-between gap-3 py-2.5">
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{item.label}</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">{item.description}</p>
-            </div>
-            <Toggle
-              checked={prefs[item.type]}
-              busy={isPending && pendingType === item.type}
-              onClick={() => toggle(item.type)}
-              label={item.label}
-            />
-          </li>
-        ))}
-      </ul>
 
-      <div className="mt-3 border-t border-slate-100 dark:border-slate-800 pt-3 space-y-2">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
-              Não perturbe (horário de silêncio)
-            </p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Não envia notificações dentro desse período.
-            </p>
-          </div>
-          <Toggle
-            checked={quiet.enabled}
-            busy={isPending && pendingType === "quiet"}
-            onClick={() => persistQuiet({ enabled: !quiet.enabled })}
-            label="Horário de silêncio"
-          />
+      {!pushActive && (
+        <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          <BellOff className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            Ative as <strong>notificações push</strong> acima para receber estes alertas. Suas
+            escolhas ficam salvas até lá.
+          </span>
         </div>
+      )}
 
-        {quiet.enabled && (
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-xs text-slate-500">Das</span>
-            <select
-              value={quiet.start}
-              disabled={isPending}
-              onChange={(e) => persistQuiet({ start: Number(e.target.value) })}
-              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm"
-            >
-              {HOURS.map((h) => (
-                <option key={h} value={h}>
-                  {String(h).padStart(2, "0")}h
-                </option>
-              ))}
-            </select>
-            <span className="text-xs text-slate-500">às</span>
-            <select
-              value={quiet.end}
-              disabled={isPending}
-              onChange={(e) => persistQuiet({ end: Number(e.target.value) })}
-              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm"
-            >
-              {HOURS.map((h) => (
-                <option key={h} value={h}>
-                  {String(h).padStart(2, "0")}h
-                </option>
-              ))}
-            </select>
+      <div className={pushActive ? "" : "opacity-60"}>
+        <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+          {ITEMS.map((item) => (
+            <li key={item.type} className="flex items-start justify-between gap-3 py-3">
+              <label htmlFor={`pref-${item.type}`} className="min-w-0 cursor-pointer">
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                  {item.label}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{item.description}</p>
+              </label>
+              <Toggle
+                id={`pref-${item.type}`}
+                checked={prefs[item.type]}
+                busy={isPending && pendingType === item.type}
+                onClick={() => toggle(item.type)}
+                label={item.label}
+              />
+            </li>
+          ))}
+        </ul>
+
+        <div className="mt-1 border-t border-slate-100 dark:border-slate-800 pt-3 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <label htmlFor="pref-quiet" className="min-w-0 cursor-pointer">
+              <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                Não perturbe (horário de silêncio)
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Não envia notificações dentro desse período.
+              </p>
+            </label>
+            <Toggle
+              id="pref-quiet"
+              checked={quiet.enabled}
+              busy={isPending && pendingType === "quiet"}
+              onClick={() => persistQuiet({ enabled: !quiet.enabled })}
+              label="Horário de silêncio"
+            />
           </div>
-        )}
-      </div>
 
-      <p className="text-[10px] text-slate-400 pt-2">
-        As preferências valem para as notificações push. É preciso ativá-las acima.
-      </p>
+          {quiet.enabled && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-xs text-slate-500">Das</span>
+              <select
+                value={quiet.start}
+                disabled={isPending}
+                onChange={(e) => persistQuiet({ start: Number(e.target.value) })}
+                className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm"
+              >
+                {HOURS.map((h) => (
+                  <option key={h} value={h}>
+                    {String(h).padStart(2, "0")}h
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-slate-500">às</span>
+              <select
+                value={quiet.end}
+                disabled={isPending}
+                onChange={(e) => persistQuiet({ end: Number(e.target.value) })}
+                className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm"
+              >
+                {HOURS.map((h) => (
+                  <option key={h} value={h}>
+                    {String(h).padStart(2, "0")}h
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      </div>
     </section>
   );
 }

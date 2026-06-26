@@ -3,7 +3,7 @@ import { DashboardCommunityTeaser } from "@/components/dashboard/DashboardCommun
 import { DashboardToolsCard } from "@/components/dashboard/DashboardToolsCard";
 import { PersonalDropsCard } from "@/components/dashboard/PersonalDropsCard";
 import { RepurchaseCard } from "@/components/dashboard/RepurchaseCard";
-import { getUserNotifications } from "@/lib/actions/alerts";
+import { getInbox } from "@/lib/notifications/inbox";
 import { getSessionUserId } from "@/lib/auth/session";
 import { getSql } from "@/lib/db";
 import { fetchDashboardForYou } from "@/lib/dashboard/for-you";
@@ -27,7 +27,7 @@ export default async function DashboardPage() {
     await Promise.all([
       sql`select public.get_monthly_stats(${userId}::uuid) as stats`,
       sql`select public.get_savings_suggestion(${userId}::uuid) as suggestion`,
-      getUserNotifications(userId, 5),
+      getInbox(userId, 5),
       fetchCommunityInsights(userCity).catch(() => null),
       sql`
         select sl.id, sl.name,
@@ -168,7 +168,7 @@ export default async function DashboardPage() {
           <Bell className="h-5 w-5 text-amber-600 shrink-0" />
           <span className="flex-1 text-amber-900 dark:text-amber-200 font-medium">
             {unreadAlerts.length}{" "}
-            {unreadAlerts.length === 1 ? "alerta novo" : "alertas novos"}
+            {unreadAlerts.length === 1 ? "nova notificação" : "novas notificações"}
           </span>
           <ChevronRight className="h-4 w-4 text-amber-600" />
         </Link>

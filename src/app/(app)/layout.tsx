@@ -3,8 +3,8 @@ import { OfflineBanner } from "@/components/OfflineBanner";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { signOut } from "@/lib/actions/auth";
 import { getSessionUserId } from "@/lib/auth/session";
+import { getUnreadInboxCount } from "@/lib/notifications/inbox";
 import { Bell, LogOut, User } from "lucide-react";
-import { getSql } from "@/lib/db";
 import Link from "next/link";
 
 export default async function AppShellLayout({ children }: { children: React.ReactNode }) {
@@ -12,13 +12,7 @@ export default async function AppShellLayout({ children }: { children: React.Rea
   const userId = hasDbEnv ? await getSessionUserId() : null;
   let alertBadge = 0;
   if (userId && hasDbEnv) {
-    try {
-      const sql = getSql();
-      const rows = await sql`select public.get_unread_alert_count(${userId}::uuid) as c`;
-      alertBadge = Number(rows[0]?.c ?? 0);
-    } catch {
-      alertBadge = 0;
-    }
+    alertBadge = await getUnreadInboxCount(userId);
   }
 
   return (
@@ -34,7 +28,7 @@ export default async function AppShellLayout({ children }: { children: React.Rea
               className="relative flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
             >
               <Bell className="h-3.5 w-3.5" />
-              Alertas
+              Notificações
               {alertBadge > 0 && (
                 <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] rounded-full bg-amber-500 text-[9px] text-white flex items-center justify-center px-0.5">
                   {alertBadge > 9 ? "9+" : alertBadge}

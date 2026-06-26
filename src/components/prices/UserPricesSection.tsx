@@ -1,7 +1,7 @@
 import { labelFromRecordedAt } from "@/lib/prices/freshness";
 import type { UserPriceRow, UserPurchaseRow } from "@/lib/prices/user-feed";
 import { formatBRL } from "@/lib/utils";
-import { ShoppingBag, Store } from "lucide-react";
+import { ChevronDown, ShoppingBag, Store } from "lucide-react";
 import Link from "next/link";
 
 type Props = {
@@ -26,7 +26,7 @@ export function UserPricesSection({ purchases, prices, city }: Props) {
             Suas compras recentes
           </h2>
           <p className="text-xs text-slate-500 mb-3">
-            Listas concluídas{city ? ` em ${city}` : ""} — preços alimentam a base ao concluir.
+            Listas concluídas{city ? ` em ${city}` : ""}
           </p>
           <ul className="space-y-2">
             {purchases.map((p) => (
@@ -61,15 +61,21 @@ export function UserPricesSection({ purchases, prices, city }: Props) {
       )}
 
       {prices.length > 0 && (
-        <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2 mb-2">
-            <Store className="h-4 w-4 text-emerald-600" />
-            Preços que você registrou
-          </h2>
-          <p className="text-xs text-slate-500 mb-3">
-            Últimos valores enviados ao concluir listas — visíveis na busca da comunidade.
-          </p>
-          <ul>
+        <details className="group rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4 [&::-webkit-details-marker]:hidden">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                <Store className="h-4 w-4 shrink-0 text-emerald-600" />
+                Preços que você registrou
+                <span className="font-normal text-slate-400">({prices.length})</span>
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Últimos valores enviados ao concluir listas
+              </p>
+            </div>
+            <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
+          </summary>
+          <ul className="px-4 pb-4">
             {prices.map((row, i) => (
               <li
                 key={`${row.product_id}-${row.store_name}-${i}`}
@@ -90,7 +96,7 @@ export function UserPricesSection({ purchases, prices, city }: Props) {
               </li>
             ))}
           </ul>
-        </section>
+        </details>
       )}
     </div>
   );

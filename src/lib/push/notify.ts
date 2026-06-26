@@ -34,8 +34,8 @@ export async function notifyNewPriceAlerts(productId: string, sinceIso: string):
     [...byUser.entries()].map(async ([userId, messages]) => {
       let unread = messages.length;
       try {
-        const c = await sql`select public.get_unread_alert_count(${userId}::uuid) as c`;
-        unread = Number(c[0]?.c ?? messages.length);
+        const { getUnreadInboxCount } = await import("@/lib/notifications/inbox");
+        unread = await getUnreadInboxCount(userId);
       } catch {
         /* mantém fallback */
       }

@@ -1,6 +1,9 @@
+import { AlertRow } from "@/components/alerts/AlertRow";
+import { NewAlertDialog } from "@/components/alerts/NewAlertDialog";
 import { CityCommunityLive } from "@/components/prices/CityCommunityLive";
 import { CityPriceFeed } from "@/components/prices/CityPriceFeed";
 import { UserPricesSection } from "@/components/prices/UserPricesSection";
+import { getUserAlerts } from "@/lib/actions/alerts";
 import { getSessionUserId } from "@/lib/auth/session";
 import { getSql } from "@/lib/db";
 import { fetchCommunityInsights } from "@/lib/prices/community-insights";
@@ -8,7 +11,7 @@ import { fetchCityPriceFeed } from "@/lib/prices/city-feed";
 import { fetchUserContributedPrices, fetchUserRecentPurchases } from "@/lib/prices/user-feed";
 import { labelFromFreshnessKey, labelFromRecordedAt } from "@/lib/prices/freshness";
 import { formatBRL } from "@/lib/utils";
-import { Search } from "lucide-react";
+import { Bell, Search } from "lucide-react";
 import Link from "next/link";
 
 type SearchRow = {
@@ -52,13 +55,14 @@ export default async function PricesPage({
       `) as SearchRow[])
     : [];
 
-  const [feed, userPurchases, userPrices, community] = isSearching
-    ? [null, [], [], null]
+  const [feed, userPurchases, userPrices, community, alerts] = isSearching
+    ? [null, [], [], null, []]
     : await Promise.all([
         fetchCityPriceFeed(userCity),
         fetchUserRecentPurchases(userId),
         fetchUserContributedPrices(userId, userCity),
         fetchCommunityInsights(userCity).catch(() => null),
+        getUserAlerts(userId),
       ]);
 
   const hasUserData = userPurchases.length > 0 || userPrices.length > 0;
@@ -110,14 +114,7 @@ export default async function PricesPage({
         <p className="text-xs text-amber-700 dark:text-amber-300">Digite pelo menos 2 caracteres.</p>
       )}
 
-      {!isSearching && community && (
-        <CityCommunityLive city={userCity} initialData={community} />
-      )}
-
-      {!isSearching && hasUserData && (
-        <UserPricesSection purchases={userPurchases} prices={userPrices} city={userCity} />
-      )}
-
+      {/* 1. Na sua cidade */}
       {!isSearching && feed && (
         <CityPriceFeed
           city={userCity}
@@ -125,6 +122,79 @@ export default async function PricesPage({
           drops={feed.drops}
           lowest={feed.lowest}
           recent={feed.recent}
+          sections={["stats"]}
+        />
+      )}
+
+      {/* 2. Ao vivo na cidade */}
+      {!isSearching && community && (
+        <CityCommunityLive city={userCity} initialData={community} sections={["live"]} />
+      )}
+
+      {/* 3. Meus alertas de preço */}
+      {!isSearching && (
+        <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <Bell className="h-4 w-4 text-amber-500" />
+              Meus alertas de preço
+            </h2>
+            <NewAlertDialog defaultCity={userCity ?? ""} />
+          </div>
+          {alerts.length === 0 ? (
+            <p className="text-xs text-slate-500">
+              Nenhum alerta. Toque em{" "}
+              <span className="font-medium text-emerald-600">+ Novo alerta</span> ou no sino ao lado
+              de um preço na busca.
+            </p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {alerts.map((a) => (
+                <AlertRow key={a.id} alert={a} />
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {/* 4. Cesta básica por mercado */}
+      {!isSearching && community && (
+        <CityCommunityLive city={userCity} initialData={community} sections={["basket"]} />
+      )}
+
+      {/* 5. Menor preço agora + Atualizações da comunidade */}
+      {!isSearching && feed && (
+        <CityPriceFeed
+          city={userCity}
+          stats={feed.stats}
+          drops={feed.drops}
+          lowest={feed.lowest}
+          recent={feed.recent}
+          sections={["lowest", "recent"]}
+        />
+      )}
+
+      {/* Demais seções */}
+      {!isSearching && feed && (
+        <CityPriceFeed
+          city={userCity}
+          stats={feed.stats}
+          drops={feed.drops}
+          lowest={feed.lowest}
+          recent={feed.recent}
+          sections={["drops"]}
+        />
+      )}
+
+      {!isSearching && hasUserData && (
+        <UserPricesSection purchases={userPurchases} prices={userPrices} city={userCity} />
+      )}
+
+      {!isSearching && community && (
+        <CityCommunityLive
+          city={userCity}
+          initialData={community}
+          sections={["header", "heat", "alerts", "comparable", "trend"]}
         />
       )}
 
@@ -148,6 +218,7 @@ export default async function PricesPage({
                   <th className="p-3 font-medium">Produto</th>
                   <th className="p-3 font-medium">Mercado</th>
                   <th className="p-3 font-medium text-right">Preço</th>
+                  <th className="p-3 font-medium text-right sr-only">Alerta</th>
                 </tr>
               </thead>
               <tbody>
@@ -179,6 +250,13 @@ export default async function PricesPage({
                           {fresh}
                         </p>
                       </td>
+                      <td className="p-3 align-top text-right">
+                        <NewAlertDialog
+                          variant="icon"
+                          defaultCity={userCity ?? ""}
+                          presetProduct={{ id: r.product_id, name: r.product_name }}
+                        />
+                      </td>
                     </tr>
                   );
                 })}
@@ -196,10 +274,6 @@ export default async function PricesPage({
 
       <p className="text-xs text-slate-500 text-center">
         Preços suspeitos não entram na busca.{" "}
-        <Link href="/alerts" className="text-emerald-600 font-medium">
-          Criar alerta de preço
-        </Link>
-        {" · "}
         <Link href="/receipt" className="text-emerald-600 font-medium">
           Importar nota (OCR)
         </Link>
