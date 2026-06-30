@@ -19,6 +19,9 @@ type Props = {
   busy: boolean;
   addedProductIds?: ReadonlySet<string>;
   planMode?: boolean;
+  genericOffer?: CatalogProduct | null;
+  onAddGeneric?: (offer: CatalogProduct) => void;
+  genericAlreadyInList?: boolean;
 };
 
 export function AddProductPanel({
@@ -34,9 +37,18 @@ export function AddProductPanel({
   busy,
   addedProductIds,
   planMode = false,
+  genericOffer = null,
+  onAddGeneric,
+  genericAlreadyInList = false,
 }: Props) {
   const showSuggestions = query.trim().length < 2;
   const list = showSuggestions ? suggestions : hits;
+  const showGenericCta =
+    planMode &&
+    !showSuggestions &&
+    query.trim().length >= 2 &&
+    genericOffer &&
+    onAddGeneric;
 
   return (
     <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-3 space-y-2 bg-white dark:bg-slate-900">
@@ -97,6 +109,34 @@ export function AddProductPanel({
       )}
 
       <ul className={`${planMode ? "max-h-64" : "max-h-52"} overflow-auto text-sm space-y-1`}>
+        {showGenericCta && (
+          <li>
+            <button
+              type="button"
+              disabled={busy || genericAlreadyInList}
+              onClick={() => onAddGeneric(genericOffer)}
+              className={`w-full text-left px-2 py-2 rounded-lg border border-dashed disabled:opacity-50 flex items-start gap-2 ${
+                genericAlreadyInList
+                  ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200"
+                  : "border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
+              }`}
+            >
+              {genericAlreadyInList ? (
+                <Check className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600" />
+              ) : null}
+              <span className="min-w-0 flex-1">
+                <span className="font-medium">{genericOffer.name}</span>
+                <span className="text-emerald-700 dark:text-emerald-300 text-xs ml-1">
+                  · sem marca
+                </span>
+                <span className="text-slate-400 text-xs ml-1">({genericOffer.unit})</span>
+                {genericAlreadyInList && (
+                  <span className="text-emerald-600 text-xs ml-1">· na lista</span>
+                )}
+              </span>
+            </button>
+          </li>
+        )}
         {list.map((p) => {
           const inList = addedProductIds?.has(p.id) ?? false;
           return (

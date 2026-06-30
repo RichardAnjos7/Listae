@@ -38,12 +38,26 @@ from (values
   ('Detergente', 'Ypê', 'un', 'Limpeza'),
   ('Água mineral', 'Crystal', 'L', 'Bebidas'),
   ('Refrigerante', 'Coca-Cola', 'L', 'Bebidas'),
+  ('Arroz', null, 'kg', 'Mercearia'),
   ('Arroz', 'Tio João', 'kg', 'Mercearia'),
+  ('Feijão preto', null, 'kg', 'Mercearia'),
   ('Feijão preto', 'Camil', 'kg', 'Mercearia'),
+  ('Açúcar', null, 'kg', 'Mercearia'),
   ('Açúcar', 'União', 'kg', 'Mercearia'),
+  ('Óleo de soja', null, 'L', 'Mercearia'),
   ('Óleo de soja', 'Soya', 'L', 'Mercearia'),
   ('Presunto', 'Sadia', 'kg', 'Frios'),
   ('Pizza congelada', 'Seara', 'un', 'Congelados')
 ) as v(name, brand, unit, cat_name)
 join public.categories c on c.name = v.cat_name
 where not exists (select 1 from public.products limit 1);
+
+update public.products p
+set base_product_id = g.id
+from public.products g
+where p.brand is not null
+  and g.brand is null
+  and p.name = g.name
+  and p.unit = g.unit
+  and p.category_id is not distinct from g.category_id
+  and p.base_product_id is null;

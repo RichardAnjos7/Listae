@@ -20,6 +20,7 @@ export type ListItemApiRow = {
     category_id: string | null;
     package_size: string | null;
     image_url: string | null;
+    variant_count?: number;
   } | null;
   added_by_profile?: { id: string; name: string } | null;
 };
@@ -37,7 +38,10 @@ export async function fetchListItems(listId: string): Promise<ListItemApiRow[]> 
         'unit', p.unit,
         'category_id', p.category_id,
         'package_size', p.package_size,
-        'image_url', p.image_url
+        'image_url', p.image_url,
+        'variant_count', (
+          select count(*)::int from products v where v.base_product_id = p.id
+        )
       ) as product,
       case
         when pr.id is null then null
@@ -95,7 +99,10 @@ export async function fetchSingleListItem(itemId: string): Promise<ListItemApiRo
         'unit', p.unit,
         'category_id', p.category_id,
         'package_size', p.package_size,
-        'image_url', p.image_url
+        'image_url', p.image_url,
+        'variant_count', (
+          select count(*)::int from products v where v.base_product_id = p.id
+        )
       ) as product,
       case
         when pr.id is null then null

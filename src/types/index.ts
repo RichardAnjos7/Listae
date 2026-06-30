@@ -26,6 +26,7 @@ export type Product = {
   subcategory?: string | null;
   image_url?: string | null;
   is_global?: boolean;
+  variant_count?: number;
 };
 
 export type ShoppingListRow = {

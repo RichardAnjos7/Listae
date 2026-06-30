@@ -6,10 +6,17 @@ import {
   completeList,
   ensureShareCode,
   removeListItem,
+  resolveListItemProduct,
   updateListItem,
 } from "@/lib/actions/lists";
 import { getListShopSuggestions, type ShopSuggestion } from "@/lib/actions/list-shop";
-import { findProductByBarcode, searchCatalogProducts, type CatalogProduct } from "@/lib/actions/products";
+import {
+  ensureGenericProduct,
+  findProductByBarcode,
+  searchCatalogProducts,
+  searchCatalogProductsForPlanning,
+  type CatalogProduct,
+} from "@/lib/actions/products";
 import {
   BUDGET_ALERT_THRESHOLD,
   useRealtimeList,
@@ -24,6 +31,7 @@ import { PlanListBanner } from "@/components/list/PlanListBanner";
 import { BarcodeScannerModal } from "@/components/list/BarcodeScannerModal";
 import { CompleteListDialog } from "@/components/list/CompleteListDialog";
 import { ListItemCard } from "@/components/list/ListItemCard";
+import { ListItemDetailSheet } from "@/components/list/ListItemDetailSheet";
 import { ListStickyTotal } from "@/components/list/ListStickyTotal";
 import { ListToasts, useListToasts } from "@/components/list/ListToasts";
 import {
@@ -110,6 +118,7 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<CatalogProduct[]>([]);
+  const [genericOffer, setGenericOffer] = useState<CatalogProduct | null>(null);
   const [suggestions, setSuggestions] = useState<ShopSuggestion[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [listCategoryFilter, setListCategoryFilter] = useState<string | null>(null);
@@ -120,6 +129,7 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completeSummary, setCompleteSummary] = useState<PurchaseCompleteSummary | null>(null);
   const [busy, setBusy] = useState(false);
+  const [detailItem, setDetailItem] = useState<ListItemRowExt | null>(null);
 
   useEffect(() => {
     setListStatus(list.status);
@@ -211,18 +221,27 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
   };
 
   const searchProductsHandler = useCallback(
-    async (q: string, catId: string | null) => {
+    async (q: string, catId: string | null, planning: boolean) => {
       if (q.trim().length < 2) {
         setHits([]);
+        setGenericOffer(null);
         return;
       }
       if (/^\d{8,14}$/.test(q.trim())) {
         const byBarcode = await findProductByBarcode(q.trim());
         setHits(byBarcode ? [byBarcode] : []);
+        setGenericOffer(null);
+        return;
+      }
+      if (planning) {
+        const data = await searchCatalogProductsForPlanning(q, catId);
+        setHits(data.hits);
+        setGenericOffer(data.genericOffer);
         return;
       }
       const data = await searchCatalogProducts(q, catId);
       setHits(data);
+      setGenericOffer(null);
     },
     []
   );
@@ -230,7 +249,10 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
   useEffect(() => {
     const panelOpen = planMode ? adding : adding && !shopMode;
     if (!panelOpen) return;
-    const t = window.setTimeout(() => void searchProductsHandler(query, categoryFilter), 250);
+    const t = window.setTimeout(
+      () => void searchProductsHandler(query, categoryFilter, planMode),
+      250
+    );
     return () => window.clearTimeout(t);
   }, [query, categoryFilter, planMode, adding, shopMode, searchProductsHandler]);
 
@@ -300,15 +322,15 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
     }
   };
 
-  const handleBarcodeScan = async (code: string) => {
-    setScannerOpen(false);
-    setAdding(true);
-    setQuery(code);
-    const product = await findProductByBarcode(code);
-    if (product) {
-      await handleAddProduct(product);
-    } else {
-      pushToast(`EAN ${code} não encontrado no catálogo`);
+  const handleAddGeneric = async (offer: CatalogProduct) => {
+    try {
+      const generic =
+        offer.id && offer.id.length > 0
+          ? offer
+          : await ensureGenericProduct(offer.name, offer.unit, offer.category_id);
+      await handleAddProduct(generic);
+    } catch {
+      pushToast("Não foi possível adicionar o item genérico");
     }
   };
 
@@ -363,6 +385,48 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
     },
     [applyOptimisticRemove, list.id, refresh]
   );
+
+  const handleBarcodeScan = async (code: string) => {
+    setScannerOpen(false);
+    const product = await findProductByBarcode(code);
+    if (!product) {
+      pushToast(`EAN ${code} não encontrado no catálogo`);
+      return;
+    }
+
+    if (detailItem) {
+      setBusy(true);
+      try {
+        await resolveListItemProduct(
+          detailItem.id,
+          list.id,
+          product.id,
+          list.supermarket_id ?? null
+        );
+        setDetailItem(null);
+        await refresh();
+      } catch {
+        await refresh();
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    setAdding(true);
+    setQuery(code);
+    await handleAddProduct(product);
+  };
+
+  const genericAlreadyInList = useMemo(() => {
+    if (!genericOffer) return false;
+    return items.some(
+      (i) =>
+        !i.product?.brand &&
+        i.product?.name.toLowerCase() === genericOffer.name.toLowerCase() &&
+        i.product?.unit === genericOffer.unit
+    );
+  }, [items, genericOffer]);
 
   const filtered = useMemo(() => {
     let rows = [...items];
@@ -472,6 +536,8 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
     });
   }, [filtered, shopMode, listCategoryFilter, categoryById]);
 
+  const isActive = listStatus === "active";
+
   const renderItemCard = (item: ListItemRowExt) => {
     const cat = item.product?.category_id
       ? categoryById.get(item.product.category_id)
@@ -487,6 +553,11 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
         categoryName={showCategoryMeta ? cat?.name : undefined}
         patchItem={patchItem}
         removeItem={removeItem}
+        onOpenDetail={
+          shopMode && isActive
+            ? (row) => setDetailItem(row)
+            : undefined
+        }
       />
     );
   };
@@ -496,7 +567,6 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
 
   const showPlanPanel = planMode ? adding : adding && !shopMode;
   const showAddToggle = !planMode && !shopMode;
-  const isActive = listStatus === "active";
 
   return (
     <div className={`space-y-3 pb-8 ${shopMode ? "pt-0" : "pt-2"}`}>
@@ -658,6 +728,9 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
           busy={busy}
           addedProductIds={addedProductIds}
           planMode={planMode}
+          genericOffer={genericOffer}
+          onAddGeneric={(offer) => void handleAddGeneric(offer)}
+          genericAlreadyInList={genericAlreadyInList}
         />
       )}
 
@@ -679,6 +752,17 @@ export function ListDetailClient({ list, initialItems, currentUserId, categories
           addedProductIds={addedProductIds}
         />
       )}
+
+      <ListItemDetailSheet
+        open={detailItem != null}
+        item={detailItem}
+        listId={list.id}
+        supermarketId={list.supermarket_id}
+        onClose={() => setDetailItem(null)}
+        onResolved={() => void refresh()}
+        patchItem={patchItem}
+        onOpenScanner={() => setScannerOpen(true)}
+      />
 
       <BarcodeScannerModal
         open={scannerOpen}

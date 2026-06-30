@@ -84,7 +84,8 @@ export default async function ListDetailPage({ params }: PageProps) {
             ))}
           </ul>
           <p className="text-[10px] text-slate-500 mt-2">
-            Estimativa com preços verificados dos últimos 30 dias.
+            Estimativa com preços verificados dos últimos 30 dias. Itens sem marca usam o
+            menor preço entre as marcas cadastradas.
           </p>
         </section>
       )}

@@ -267,6 +267,87 @@ export async function updateListItem(
   if (patch.checked === false) {
     await sql`update list_items set checked = false, checked_by = null where id = ${itemId}`;
   }
+
+  revalidatePath(`/lists/${listId}`);
+}
+
+export async function resolveListItemProduct(
+  itemId: string,
+  listId: string,
+  newProductId: string,
+  supermarketId?: string | null
+): Promise<{ item: ListItemApiRow; merged: boolean }> {
+  const userId = await requireUserId();
+  await requireListAccess(listId, userId);
+  const sql = getSql();
+
+  const currentRows = await sql`
+    select id, product_id, quantity, unit_price, checked
+    from list_items
+    where id = ${itemId} and list_id = ${listId}
+    limit 1
+  `;
+  const current = currentRows[0];
+  if (!current) throw new Error("Item não encontrado");
+
+  const currentProductId = current.product_id as string;
+  if (currentProductId === newProductId) {
+    const unchanged = await fetchSingleListItem(itemId);
+    if (!unchanged) throw new Error("Item não encontrado");
+    return { item: unchanged, merged: false };
+  }
+
+  const duplicate = await sql`
+    select id, quantity, unit_price, checked
+    from list_items
+    where list_id = ${listId}
+      and product_id = ${newProductId}
+      and id <> ${itemId}
+    limit 1
+  `;
+
+  let resultItemId = itemId;
+  let merged = false;
+
+  if (duplicate[0]) {
+    merged = true;
+    const newQty = Number(duplicate[0].quantity) + Number(current.quantity);
+    let price = duplicate[0].unit_price as number | null;
+    if (price == null && current.unit_price != null) {
+      price = Number(current.unit_price);
+    }
+    if (price == null && supermarketId !== undefined) {
+      price = await getSuggestedUnitPrice(newProductId, supermarketId ?? null);
+    }
+    await sql`
+      update list_items
+      set quantity = ${newQty},
+          unit_price = coalesce(unit_price, ${price}),
+          checked = ${Boolean(current.checked) || Boolean(duplicate[0].checked)},
+          updated_at = now()
+      where id = ${duplicate[0].id as string}
+    `;
+    await sql`delete from list_items where id = ${itemId}`;
+    resultItemId = duplicate[0].id as string;
+  } else {
+    let price = current.unit_price as number | null;
+    if (price == null && supermarketId !== undefined) {
+      price = await getSuggestedUnitPrice(newProductId, supermarketId ?? null);
+    }
+    await sql`
+      update list_items
+      set product_id = ${newProductId},
+          unit_price = coalesce(unit_price, ${price}),
+          updated_at = now()
+      where id = ${itemId}
+    `;
+  }
+
+  revalidatePath(`/lists/${listId}`);
+  const item = await fetchSingleListItem(resultItemId);
+  if (!item) throw new Error("Item não encontrado após resolver marca");
+
+  return { item, merged };
 }
 
 export async function removeListItem(itemId: string, listId: string) {

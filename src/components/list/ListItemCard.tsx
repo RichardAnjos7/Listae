@@ -20,6 +20,7 @@ type Props = {
   categoryName?: string | null;
   patchItem: (itemId: string, patch: ItemPatch) => void;
   removeItem: (itemId: string) => void;
+  onOpenDetail?: (item: ListItemRowExt) => void;
 };
 
 function formatQty(qty: number): string {
@@ -109,6 +110,7 @@ export const ListItemCard = memo(function ListItemCard({
   categoryName,
   patchItem,
   removeItem,
+  onOpenDetail,
 }: Props) {
   const onQuantityChange = useCallback(
     (qty: number) => patchItem(item.id, { quantity: qty }),
@@ -130,6 +132,9 @@ export const ListItemCard = memo(function ListItemCard({
   const sub = lineTotal(qty, unitPrice);
   const hasPrice = unitPrice != null;
   const showLastPriceHint = !hasPrice && lastPrice != null;
+
+  const hasVariants = (item.product?.variant_count ?? 0) > 0;
+  const isUnresolvedGeneric = hasVariants && !item.product?.brand;
 
   if (readOnly) {
     const metaParts: string[] = [];
@@ -183,14 +188,28 @@ export const ListItemCard = memo(function ListItemCard({
           >
             {item.checked && <span className="text-white text-xs">✓</span>}
           </button>
-          <div className="min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={() => onOpenDetail?.(item)}
+            className="min-w-0 flex-1 text-left"
+          >
             <p className="font-medium text-sm truncate text-slate-900 dark:text-white">
               {item.product?.name ?? "Produto"}
             </p>
             <p className="text-[10px] text-slate-500 truncate">
-              {item.added_by_profile?.name && `por ${item.added_by_profile.name}`}
+              {isUnresolvedGeneric ? (
+                <span className="text-amber-600 dark:text-amber-400">Toque para escolher marca</span>
+              ) : item.product?.brand ? (
+                item.product.brand
+              ) : null}
+              {item.added_by_profile?.name && (
+                <span>
+                  {isUnresolvedGeneric || item.product?.brand ? " · " : ""}
+                  por {item.added_by_profile.name}
+                </span>
+              )}
             </p>
-          </div>
+          </button>
           <span className="font-bold text-sm text-emerald-700 dark:text-emerald-400 shrink-0">
             {formatBRL(sub)}
           </span>
@@ -245,6 +264,12 @@ export const ListItemCard = memo(function ListItemCard({
                 {item.product?.name ?? "Produto"}
               </p>
               <p className="text-xs text-slate-500 truncate mt-0.5">
+                {isUnresolvedGeneric ? (
+                  <>
+                    <span className="text-amber-600 dark:text-amber-400">qualquer marca</span>
+                    {" · "}
+                  </>
+                ) : null}
                 {metaParts.join(" · ")}
                 {categoryName && (
                   <span className="ml-1">

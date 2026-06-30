@@ -26,6 +26,16 @@ export type CatalogProduct = {
   subcategory: string | null;
   image_url: string | null;
   is_global: boolean;
+  variant_count?: number;
+};
+
+export type ProductBrandVariant = CatalogProduct & {
+  last_price: number | null;
+};
+
+export type PlanningSearchResult = {
+  hits: CatalogProduct[];
+  genericOffer: CatalogProduct | null;
 };
 
 export async function searchCatalogProducts(
@@ -61,6 +71,183 @@ export async function searchCatalogProducts(
   }
 
   return results;
+}
+
+function mapCatalogRow(r: Record<string, unknown>): CatalogProduct {
+  return {
+    id: r.id as string,
+    name: r.name as string,
+    brand: r.brand as string | null,
+    unit: r.unit as string,
+    package_size: r.package_size as string | null,
+    barcode: r.barcode as string | null,
+    category_id: r.category_id as string | null,
+    subcategory: r.subcategory as string | null,
+    image_url: r.image_url as string | null,
+    is_global: Boolean(r.is_global),
+    variant_count: r.variant_count != null ? Number(r.variant_count) : undefined,
+  };
+}
+
+async function findGenericProduct(
+  sql: ReturnType<typeof getSql>,
+  name: string,
+  unit: string,
+  categoryId: string | null,
+  userId: string
+): Promise<CatalogProduct | null> {
+  const rows = await sql`
+    select
+      p.id, p.name, p.brand, p.unit, p.package_size, p.barcode, p.category_id,
+      p.subcategory, p.image_url, p.is_global,
+      (select count(*)::int from products v where v.base_product_id = p.id) as variant_count
+    from products p
+    where p.brand is null
+      and lower(trim(p.name)) = lower(trim(${name}))
+      and p.unit = ${unit}
+      and p.category_id is not distinct from ${categoryId}::uuid
+      and (p.is_global = true or p.created_by = ${userId}::uuid)
+    limit 1
+  `;
+  return rows[0] ? mapCatalogRow(rows[0] as Record<string, unknown>) : null;
+}
+
+export async function ensureGenericProduct(
+  name: string,
+  unit: string,
+  categoryId: string | null
+): Promise<CatalogProduct> {
+  const userId = await requireUserId();
+  const sql = getSql();
+  const trimmedName = name.trim();
+  if (!trimmedName) throw new Error("Nome do produto é obrigatório");
+
+  const existing = await findGenericProduct(sql, trimmedName, unit, categoryId, userId);
+  if (existing) return existing;
+
+  const inserted = await sql`
+    insert into products (name, brand, unit, category_id, is_global, created_by)
+    values (${trimmedName}, null, ${unit}, ${categoryId}, true, ${userId})
+    returning id, name, brand, unit, package_size, barcode, category_id, subcategory, image_url, is_global
+  `;
+  const row = inserted[0] as Record<string, unknown>;
+  const genericId = row.id as string;
+
+  await sql`
+    update products
+    set base_product_id = ${genericId}
+    where brand is not null
+      and lower(trim(name)) = lower(trim(${trimmedName}))
+      and unit = ${unit}
+      and category_id is not distinct from ${categoryId}::uuid
+      and base_product_id is null
+  `;
+
+  const variantRows = await sql`
+    select count(*)::int as c from products where base_product_id = ${genericId}
+  `;
+
+  return {
+    ...mapCatalogRow(row),
+    variant_count: Number(variantRows[0]?.c ?? 0),
+  };
+}
+
+export async function searchCatalogProductsForPlanning(
+  query: string,
+  categoryId?: string | null
+): Promise<PlanningSearchResult> {
+  const hits = await searchCatalogProducts(query, categoryId);
+  const q = query.trim();
+  if (q.length < 2) return { hits, genericOffer: null };
+
+  const userId = await requireUserId();
+  const sql = getSql();
+
+  const directGeneric = await sql`
+    select
+      p.id, p.name, p.brand, p.unit, p.package_size, p.barcode, p.category_id,
+      p.subcategory, p.image_url, p.is_global,
+      (select count(*)::int from products v where v.base_product_id = p.id) as variant_count
+    from public.search_catalog_products(${q}, ${userId}::uuid, ${20}) sc
+    join products p on p.id = sc.id
+    where p.brand is null
+    order by sc.rank_score desc
+    limit 1
+  `;
+
+  if (directGeneric[0]) {
+    return { hits, genericOffer: mapCatalogRow(directGeneric[0] as Record<string, unknown>) };
+  }
+
+  const branded = hits.find((h) => h.brand);
+  if (branded) {
+    const offer = await findGenericProduct(
+      sql,
+      branded.name,
+      branded.unit,
+      branded.category_id,
+      userId
+    );
+    if (offer) return { hits, genericOffer: offer };
+  }
+
+  const namedHit = hits[0];
+  if (namedHit && !namedHit.brand) {
+    return { hits, genericOffer: null };
+  }
+
+  if (namedHit?.brand) {
+    return {
+      hits,
+      genericOffer: {
+        id: "",
+        name: namedHit.name,
+        brand: null,
+        unit: namedHit.unit,
+        package_size: namedHit.package_size,
+        barcode: null,
+        category_id: namedHit.category_id,
+        subcategory: namedHit.subcategory,
+        image_url: namedHit.image_url,
+        is_global: true,
+        variant_count: hits.filter((h) => h.brand && h.name === namedHit.name).length || undefined,
+      },
+    };
+  }
+
+  return { hits, genericOffer: null };
+}
+
+export async function getProductBrandVariants(
+  productId: string,
+  supermarketId?: string | null
+): Promise<ProductBrandVariant[]> {
+  const userId = await requireUserId();
+  const sql = getSql();
+
+  const rows = await sql`
+    select * from public.get_product_brand_variants(
+      ${productId}::uuid,
+      ${userId}::uuid,
+      ${supermarketId ?? null}::uuid,
+      ${30}
+    )
+  `;
+
+  return rows.map((r) => ({
+    id: r.id as string,
+    name: r.name as string,
+    brand: r.brand as string | null,
+    unit: r.unit as string,
+    package_size: r.package_size as string | null,
+    barcode: r.barcode as string | null,
+    category_id: r.category_id as string | null,
+    subcategory: null,
+    image_url: r.image_url as string | null,
+    is_global: true,
+    last_price: r.last_price != null ? Number(r.last_price) : null,
+  }));
 }
 
 export async function suggestProductAttributes(name: string): Promise<ProductAttributeSuggestion> {
