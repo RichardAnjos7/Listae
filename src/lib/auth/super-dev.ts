@@ -7,9 +7,11 @@ export async function isSuperDev(userId?: string | null): Promise<boolean> {
   if (!userId) return false;
   const sql = getSql();
   const rows = await sql`
-    select username from users where id = ${userId} limit 1
+    select username, is_admin from users where id = ${userId} limit 1
   `;
-  return (rows[0]?.username as string | null) === SUPER_DEV_USERNAME;
+  const row = rows[0] as { username: string | null; is_admin?: boolean } | undefined;
+  if (!row) return false;
+  return Boolean(row.is_admin) || row.username === SUPER_DEV_USERNAME;
 }
 
 export async function requireSuperDev(): Promise<string> {
@@ -23,7 +25,7 @@ export async function requireSuperDev(): Promise<string> {
 export async function getSuperDevUserIds(): Promise<string[]> {
   const sql = getSql();
   const rows = await sql`
-    select id from users where username = ${SUPER_DEV_USERNAME}
+    select id from users where is_admin = true or username = ${SUPER_DEV_USERNAME}
   `;
   return rows.map((r) => r.id as string);
 }
