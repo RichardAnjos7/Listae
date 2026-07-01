@@ -1,6 +1,7 @@
 "use client";
 
 import { LiveFeedModal } from "@/components/prices/LiveFeedModal";
+import { LiveFeedPriceCell } from "@/components/prices/LiveFeedPriceCell";
 import type { CommunityInsights } from "@/lib/prices/community-insights";
 import { labelFromRecordedAt } from "@/lib/prices/freshness";
 import { formatBRL } from "@/lib/utils";
@@ -145,7 +146,7 @@ export function CommunitySections({
             {liveFeed.slice(0, 5).map((item) => (
               <li
                 key={item.id}
-                className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-2 py-1 border-b border-emerald-200/40 last:border-0"
+                className="grid grid-cols-[minmax(0,1fr)_6rem] gap-2 py-1 border-b border-emerald-200/40 last:border-0"
               >
                 <span className="min-w-0 truncate text-slate-800 dark:text-slate-200">
                   <span className="text-[10px] text-slate-400 mr-1">
@@ -153,14 +154,11 @@ export function CommunitySections({
                   </span>
                   {productLabel(item.product_name, item.brand)} — {item.store_name}
                 </span>
-                <span className="text-right font-semibold text-emerald-700 dark:text-emerald-400 tabular-nums flex flex-col items-end gap-0.5">
-                  {item.is_promotion && (
-                    <span className="text-[9px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400">
-                      Promo
-                    </span>
-                  )}
-                  {formatBRL(item.unit_price)}
-                </span>
+                <LiveFeedPriceCell
+                  unitPrice={item.unit_price}
+                  isPromotion={item.is_promotion}
+                  validUntil={item.valid_until}
+                />
               </li>
             ))}
           </ul>

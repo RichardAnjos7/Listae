@@ -355,7 +355,9 @@ function readProductForm(formData: FormData) {
   if (!name) throw new Error("Nome do produto é obrigatório");
   if (!categoryId) throw new Error("Selecione uma categoria");
 
-  return { name, brand, unit, packageSize, categoryId };
+  const imageUrl = String(formData.get("image_url") ?? "").trim() || null;
+
+  return { name, brand, unit, packageSize, categoryId, imageUrl };
 }
 
 function readOptionalPriceFromForm(formData: FormData) {
@@ -386,11 +388,11 @@ function readOptionalPriceFromForm(formData: FormData) {
 export async function createCatalogProduct(formData: FormData) {
   const userId = await requireUserId();
   const sql = getSql();
-  const { name, brand, unit, packageSize, categoryId } = readProductForm(formData);
+  const { name, brand, unit, packageSize, categoryId, imageUrl } = readProductForm(formData);
   const optionalPrice = readOptionalPriceFromForm(formData);
 
   const inserted = await sql`
-    insert into products (name, brand, unit, package_size, barcode, category_id, is_global, created_by)
+    insert into products (name, brand, unit, package_size, barcode, category_id, image_url, is_global, created_by)
     values (
       ${name},
       ${brand},
@@ -398,6 +400,7 @@ export async function createCatalogProduct(formData: FormData) {
       ${packageSize},
       null,
       ${categoryId},
+      ${imageUrl},
       true,
       ${userId}
     )

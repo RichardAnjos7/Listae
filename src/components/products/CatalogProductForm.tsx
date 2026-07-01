@@ -1,6 +1,7 @@
 "use client";
 
 import { CurrencyInput } from "@/components/list/CurrencyInput";
+import { ProductImagePicker } from "@/components/products/ProductImagePicker";
 import { suggestProductAttributes } from "@/lib/actions/products";
 import { inferFromDictionary, parsePackageFromName, resolveCategoryId } from "@/lib/catalog/infer-product";
 import { PRODUCT_UNITS } from "@/lib/catalog/units";
@@ -57,6 +58,9 @@ export function CatalogProductForm({
   const [isPromotion, setIsPromotion] = useState(false);
   const [validUntil, setValidUntil] = useState("");
   const [showPriceSection, setShowPriceSection] = useState(false);
+  const [showPhotoSection, setShowPhotoSection] = useState(false);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
 
   const unitTouched = useRef(isEdit);
   const categoryTouched = useRef(isEdit);
@@ -154,8 +158,17 @@ export function CatalogProductForm({
   };
 
   return (
-    <form action={action} className="space-y-2">
+    <form
+      action={action}
+      className="space-y-2"
+      onSubmit={(e) => {
+        if (imageUploading) {
+          e.preventDefault();
+        }
+      }}
+    >
       {productId && <input type="hidden" name="product_id" value={productId} />}
+      <input type="hidden" name="image_url" value={imageUrl ?? ""} />
       <input
         name="name"
         required
@@ -318,11 +331,31 @@ export function CatalogProductForm({
         </div>
       )}
 
+      {!isEdit && (
+        <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-700 p-3 space-y-2">
+          <button
+            type="button"
+            onClick={() => setShowPhotoSection((v) => !v)}
+            className="w-full text-left text-xs font-medium text-slate-600 dark:text-slate-400"
+          >
+            {showPhotoSection ? "▼" : "▶"} Adicionar foto (opcional)
+          </button>
+          {showPhotoSection && (
+            <ProductImagePicker
+              imageUrl={imageUrl}
+              onImageUrlChange={setImageUrl}
+              onUploadingChange={setImageUploading}
+            />
+          )}
+        </div>
+      )}
+
       <button
         type="submit"
-        className="w-full rounded-xl border border-emerald-600 text-emerald-700 dark:text-emerald-400 py-2 text-sm font-medium"
+        disabled={imageUploading}
+        className="w-full rounded-xl border border-emerald-600 text-emerald-700 dark:text-emerald-400 py-2 text-sm font-medium disabled:opacity-50"
       >
-        {submitLabel}
+        {imageUploading ? "Enviando foto…" : submitLabel}
       </button>
     </form>
   );

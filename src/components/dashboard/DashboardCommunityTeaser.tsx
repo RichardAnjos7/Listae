@@ -1,8 +1,8 @@
 "use client";
 
+import { LiveFeedPriceCell } from "@/components/prices/LiveFeedPriceCell";
 import type { CommunityInsights } from "@/lib/prices/community-insights";
 import { labelFromRecordedAt } from "@/lib/prices/freshness";
-import { formatBRL } from "@/lib/utils";
 import { Activity, ChevronRight, MapPin, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -113,9 +113,12 @@ export function DashboardCommunityTeaser({ city, data }: Props) {
                 </span>
                 {productLabel(item.product_name, item.brand)} — {item.store_name}
               </span>
-              <span className="shrink-0 font-semibold text-emerald-700 dark:text-emerald-400 text-xs tabular-nums">
-                {formatBRL(item.unit_price)}
-              </span>
+              <LiveFeedPriceCell
+                unitPrice={item.unit_price}
+                isPromotion={item.is_promotion}
+                validUntil={item.valid_until}
+                className="shrink-0 text-xs"
+              />
             </li>
           ))}
         </ul>

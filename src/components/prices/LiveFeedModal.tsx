@@ -1,8 +1,8 @@
 "use client";
 
 import type { CityLiveFeedItem } from "@/lib/prices/community-insights";
+import { LiveFeedPriceCell } from "@/components/prices/LiveFeedPriceCell";
 import { labelFromRecordedAt } from "@/lib/prices/freshness";
-import { formatBRL } from "@/lib/utils";
 import { Activity, X } from "lucide-react";
 import { useEffect } from "react";
 
@@ -66,7 +66,7 @@ export function LiveFeedModal({ open, city, items, onClose }: Props) {
             {items.map((item) => (
               <li
                 key={item.id}
-                className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-2 py-1.5 border-b border-slate-100 dark:border-slate-800 last:border-0"
+                className="grid grid-cols-[minmax(0,1fr)_6rem] gap-2 py-1.5 border-b border-slate-100 dark:border-slate-800 last:border-0"
               >
                 <span className="min-w-0 truncate text-slate-800 dark:text-slate-200">
                   <span className="text-[10px] text-slate-400 mr-1">
@@ -74,9 +74,11 @@ export function LiveFeedModal({ open, city, items, onClose }: Props) {
                   </span>
                   {productLabel(item.product_name, item.brand)} — {item.store_name}
                 </span>
-                <span className="text-right font-semibold text-emerald-700 dark:text-emerald-400 tabular-nums">
-                  {formatBRL(item.unit_price)}
-                </span>
+                <LiveFeedPriceCell
+                  unitPrice={item.unit_price}
+                  isPromotion={item.is_promotion}
+                  validUntil={item.valid_until}
+                />
               </li>
             ))}
           </ul>

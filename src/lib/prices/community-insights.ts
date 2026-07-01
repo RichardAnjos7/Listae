@@ -9,6 +9,7 @@ export type CityLiveFeedItem = {
   unit_price: number;
   recorded_at: string;
   is_promotion?: boolean;
+  valid_until?: string | null;
 };
 
 export type CityHeatMapItem = CityLiveFeedItem;
@@ -118,6 +119,7 @@ export async function fetchCommunityInsights(
       unit_price: Number(r.unit_price),
       recorded_at: r.recorded_at as string,
       is_promotion: Boolean(r.is_promotion),
+      valid_until: (r.valid_until as string | null) ?? null,
     })),
     heatMap: (heatRes ?? []).map((r) => ({
       id: "",
