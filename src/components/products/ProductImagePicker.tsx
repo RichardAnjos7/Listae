@@ -8,6 +8,8 @@ type Props = {
   onImageUrlChange: (url: string | null) => void;
   onUploadingChange?: (uploading: boolean) => void;
   disabled?: boolean;
+  /** Envia para staging/ — usado em submissões aguardando aprovação do admin */
+  staging?: boolean;
 };
 
 export function ProductImagePicker({
@@ -15,6 +17,7 @@ export function ProductImagePicker({
   onImageUrlChange,
   onUploadingChange,
   disabled,
+  staging = false,
 }: Props) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +31,10 @@ export function ProductImagePicker({
     try {
       const body = new FormData();
       body.append("file", file);
-      const res = await fetch("/api/catalog/product-image", { method: "POST", body });
+      const res = await fetch(
+        `/api/catalog/product-image${staging ? "?staging=1" : ""}`,
+        { method: "POST", body }
+      );
       const json = (await res.json()) as { url?: string; error?: string };
       if (!res.ok) throw new Error(json.error ?? "Falha no upload");
       if (!json.url) throw new Error("URL da imagem não retornada");

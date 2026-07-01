@@ -1,9 +1,18 @@
 import { createCatalogProduct } from "@/lib/actions/products";
+import {
+  approveCatalogSubmissionFromForm,
+  getPendingCatalogSubmissions,
+  getUserPendingSubmissions,
+  rejectCatalogSubmissionFromForm,
+  submitCatalogProduct,
+} from "@/lib/actions/catalog-submissions";
 import { getProfile } from "@/lib/actions/profile";
-import { getSessionUserId } from "@/lib/auth/session";
+import { getSessionUserId, requireUserId } from "@/lib/auth/session";
 import { isSuperDev } from "@/lib/auth/super-dev";
 import { AddProductCatalog } from "@/components/products/AddProductCatalog";
+import { CatalogSubmissionQueue } from "@/components/products/CatalogSubmissionQueue";
 import { ProductCatalogGrouped } from "@/components/products/ProductCatalogGrouped";
+import { UserPendingSubmissions } from "@/components/products/UserPendingSubmissions";
 import { getSql } from "@/lib/db";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -11,12 +20,20 @@ import { redirect } from "next/navigation";
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; added?: string; updated?: string; deleted?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    added?: string;
+    submitted?: string;
+    approved?: string;
+    rejected?: string;
+    updated?: string;
+    deleted?: string;
+  }>;
 }) {
   const userId = await getSessionUserId();
   if (!userId) return null;
 
-  const { q, added, updated, deleted } = await searchParams;
+  const { q, added, submitted, approved, rejected, updated, deleted } = await searchParams;
   const query = (q ?? "").trim();
   const canManage = await isSuperDev(userId);
 
@@ -43,7 +60,7 @@ export default async function ProductsPage({
         limit 60
       `;
 
-  const [products, categories, markets] = await Promise.all([
+  const [products, categories, markets, pendingForAdmin, userPending] = await Promise.all([
     query.length >= 1
       ? sql`
           select
@@ -70,6 +87,8 @@ export default async function ProductsPage({
         `,
     sql`select id, name, icon from categories order by display_order, name`,
     marketsQuery,
+    canManage ? getPendingCatalogSubmissions() : Promise.resolve([]),
+    getUserPendingSubmissions(userId),
   ]);
 
   const favRows = await sql`
@@ -106,10 +125,16 @@ export default async function ProductsPage({
     is_global: Boolean(p.is_global),
   }));
 
-  async function createProductAction(formData: FormData) {
+  async function submitProductAction(formData: FormData) {
     "use server";
-    await createCatalogProduct(formData);
-    redirect("/products?added=1");
+    const uid = await requireUserId();
+    if (await isSuperDev(uid)) {
+      await createCatalogProduct(formData);
+      redirect("/products?added=1");
+    } else {
+      await submitCatalogProduct(formData);
+      redirect("/products?submitted=1");
+    }
   }
 
   return (
@@ -118,19 +143,38 @@ export default async function ProductsPage({
         <div>
           <h1 className="text-xl font-semibold text-slate-900 dark:text-white">Catálogo</h1>
           <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
-            Produtos agrupados por categoria. Ao cadastrar, unidade e categoria são sugeridas automaticamente.
+            {canManage
+              ? "Produtos agrupados por categoria. Você publica direto; outros usuários passam por revisão."
+              : "Produtos agrupados por categoria. Suas sugestões são revisadas antes de entrar no catálogo."}
           </p>
         </div>
         <AddProductCatalog
           categories={categoryOptions}
           markets={marketOptions}
-          action={createProductAction}
+          action={submitProductAction}
+          submitLabel={canManage ? "Publicar no catálogo" : "Enviar para revisão"}
+          imageStaging={!canManage}
         />
       </div>
 
+      {submitted === "1" && (
+        <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/80 dark:bg-emerald-950/40 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-200">
+          Sugestão enviada! Você receberá uma notificação quando for revisada.
+        </div>
+      )}
       {added === "1" && (
         <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/80 dark:bg-emerald-950/40 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-200">
-          Produto adicionado ao catálogo. Se informou preço, ele já aparece na comunidade da sua cidade.
+          Produto publicado no catálogo. Se informou preço, ele já aparece na comunidade da sua cidade.
+        </div>
+      )}
+      {approved === "1" && (
+        <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/80 dark:bg-emerald-950/40 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-200">
+          Produto aprovado e publicado no catálogo.
+        </div>
+      )}
+      {rejected === "1" && (
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-xs text-slate-600 dark:text-slate-400">
+          Submissão rejeitada.
         </div>
       )}
       {updated === "1" && (
@@ -143,6 +187,16 @@ export default async function ProductsPage({
           Produto excluído.
         </div>
       )}
+
+      {canManage && pendingForAdmin.length > 0 && (
+        <CatalogSubmissionQueue
+          submissions={pendingForAdmin}
+          approveAction={approveCatalogSubmissionFromForm}
+          rejectAction={rejectCatalogSubmissionFromForm}
+        />
+      )}
+
+      {!canManage && <UserPendingSubmissions submissions={userPending} />}
 
       <form method="get" className="flex gap-2">
         <input
@@ -170,7 +224,7 @@ export default async function ProductsPage({
       {productRows.length === 0 && (
         <p className="text-sm text-slate-500 text-center py-8">
           Nenhum produto encontrado.{" "}
-          {query ? "Tente outro termo ou clique em Adicionar." : "Clique em Adicionar para cadastrar."}
+          {query ? "Tente outro termo ou clique em Adicionar." : "Clique em Adicionar para sugerir um produto."}
         </p>
       )}
 

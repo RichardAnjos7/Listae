@@ -6,7 +6,9 @@ export type NotificationType =
   | "repurchase"
   | "price_drop"
   | "weekly_digest"
-  | "monthly_summary";
+  | "monthly_summary"
+  | "catalog_moderation"
+  | "catalog_review";
 
 export type NotificationPreferences = Record<NotificationType, boolean>;
 
@@ -32,6 +34,8 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
   "price_drop",
   "weekly_digest",
   "monthly_summary",
+  "catalog_moderation",
+  "catalog_review",
 ];
 
 export const DEFAULT_PREFERENCES: NotificationPreferences = {
@@ -41,6 +45,8 @@ export const DEFAULT_PREFERENCES: NotificationPreferences = {
   price_drop: true,
   weekly_digest: true,
   monthly_summary: true,
+  catalog_moderation: true,
+  catalog_review: true,
 };
 
 export const DEFAULT_QUIET: QuietHours = {
@@ -57,6 +63,8 @@ type PrefRow = {
   price_drop: boolean;
   weekly_digest: boolean;
   monthly_summary: boolean;
+  catalog_moderation: boolean;
+  catalog_review: boolean;
   quiet_hours_enabled: boolean;
   quiet_start: number;
   quiet_end: number;
@@ -73,6 +81,8 @@ function rowToContext(r: PrefRow | undefined): NotificationContext {
       price_drop: Boolean(r.price_drop),
       weekly_digest: Boolean(r.weekly_digest),
       monthly_summary: Boolean(r.monthly_summary),
+      catalog_moderation: Boolean(r.catalog_moderation ?? true),
+      catalog_review: Boolean(r.catalog_review ?? true),
     },
     quiet: {
       enabled: Boolean(r.quiet_hours_enabled),
@@ -89,6 +99,7 @@ export async function getNotificationContext(userId: string): Promise<Notificati
     const rows = await sql`
       select
         price_alert, list_activity, repurchase, price_drop, weekly_digest, monthly_summary,
+        catalog_moderation, catalog_review,
         quiet_hours_enabled, quiet_start, quiet_end, utc_offset_minutes
       from notification_preferences
       where user_id = ${userId}
@@ -120,7 +131,8 @@ export async function updateNotificationPreferences(
 
   await sql`
     insert into notification_preferences (
-      user_id, price_alert, list_activity, repurchase, price_drop, weekly_digest, monthly_summary, updated_at
+      user_id, price_alert, list_activity, repurchase, price_drop, weekly_digest, monthly_summary,
+      catalog_moderation, catalog_review, updated_at
     )
     values (
       ${userId},
@@ -130,6 +142,8 @@ export async function updateNotificationPreferences(
       ${next.price_drop},
       ${next.weekly_digest},
       ${next.monthly_summary},
+      ${next.catalog_moderation},
+      ${next.catalog_review},
       now()
     )
     on conflict (user_id) do update set
@@ -139,6 +153,8 @@ export async function updateNotificationPreferences(
       price_drop = excluded.price_drop,
       weekly_digest = excluded.weekly_digest,
       monthly_summary = excluded.monthly_summary,
+      catalog_moderation = excluded.catalog_moderation,
+      catalog_review = excluded.catalog_review,
       updated_at = now()
   `;
 

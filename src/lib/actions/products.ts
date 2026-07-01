@@ -3,6 +3,7 @@
 import { requireSuperDev } from "@/lib/auth/super-dev";
 import { requireUserId } from "@/lib/auth/session";
 import { inferFromDictionary, parsePackageFromName } from "@/lib/catalog/infer-product";
+import { parseBlobPathname } from "@/lib/catalog/blob-images";
 import { parsePackageSize, parsePackageFromForm } from "@/lib/catalog/units";
 import { getSql } from "@/lib/db";
 import { revalidatePath } from "next/cache";
@@ -386,10 +387,15 @@ function readOptionalPriceFromForm(formData: FormData) {
 }
 
 export async function createCatalogProduct(formData: FormData) {
-  const userId = await requireUserId();
+  const userId = await requireSuperDev();
   const sql = getSql();
   const { name, brand, unit, packageSize, categoryId, imageUrl } = readProductForm(formData);
   const optionalPrice = readOptionalPriceFromForm(formData);
+
+  const imagePath = parseBlobPathname(imageUrl);
+  if (imagePath?.startsWith("staging/")) {
+    throw new Error("Use publicação direta apenas com foto final, não em staging");
+  }
 
   const inserted = await sql`
     insert into products (name, brand, unit, package_size, barcode, category_id, image_url, is_global, created_by)

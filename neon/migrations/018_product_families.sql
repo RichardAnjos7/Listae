@@ -8,7 +8,7 @@ create index if not exists products_base_product_id_idx
 
 -- Cria produtos genéricos para marcas existentes que ainda não têm pai
 insert into public.products (name, brand, unit, category_id, is_global, created_by)
-select distinct p.name, null, p.unit, p.category_id, true, null
+select distinct p.name, null, p.unit, p.category_id, true, null::uuid
 from public.products p
 where p.brand is not null
   and p.is_global = true

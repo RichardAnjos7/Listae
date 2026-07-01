@@ -40,6 +40,16 @@ const ITEMS: { type: NotificationType; label: string; description: string }[] = 
     label: "Resumo do mês",
     description: "Total gasto, número de compras e dica de economia.",
   },
+  {
+    type: "catalog_moderation",
+    label: "Moderação do catálogo",
+    description: "Quando alguém sugere um novo produto para o catálogo (admin).",
+  },
+  {
+    type: "catalog_review",
+    label: "Revisão do catálogo",
+    description: "Quando sua sugestão de produto é aprovada ou não publicada.",
+  },
 ];
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);

@@ -19,3 +19,11 @@ export async function requireSuperDev(): Promise<string> {
   }
   return userId;
 }
+
+export async function getSuperDevUserIds(): Promise<string[]> {
+  const sql = getSql();
+  const rows = await sql`
+    select id from users where username = ${SUPER_DEV_USERNAME}
+  `;
+  return rows.map((r) => r.id as string);
+}

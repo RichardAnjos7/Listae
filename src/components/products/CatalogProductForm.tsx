@@ -36,6 +36,8 @@ type Props = {
   productId?: string;
   initial?: InitialValues;
   enableSuggestions?: boolean;
+  /** false = admin publica direto; true = foto vai para staging até aprovação */
+  imageStaging?: boolean;
 };
 
 export function CatalogProductForm({
@@ -46,6 +48,7 @@ export function CatalogProductForm({
   productId,
   initial,
   enableSuggestions = true,
+  imageStaging = true,
 }: Props) {
   const isEdit = Boolean(productId);
   const [name, setName] = useState(initial?.name ?? "");
@@ -345,6 +348,7 @@ export function CatalogProductForm({
               imageUrl={imageUrl}
               onImageUrlChange={setImageUrl}
               onUploadingChange={setImageUploading}
+              staging={imageStaging}
             />
           )}
         </div>

@@ -43,7 +43,15 @@ function NewListFab() {
   );
 }
 
-function NavItem({ item, active }: { item: MobileTabNavItem; active: boolean }) {
+function NavItem({
+  item,
+  active,
+  badge,
+}: {
+  item: MobileTabNavItem;
+  active: boolean;
+  badge?: number;
+}) {
   const { href, label, Icon } = item;
 
   return (
@@ -65,6 +73,11 @@ function NavItem({ item, active }: { item: MobileTabNavItem; active: boolean }) 
             strokeWidth={active ? 2.35 : 2.1}
             absoluteStrokeWidth
           />
+          {badge != null && badge > 0 && (
+            <span className="absolute -top-1 -right-1.5 min-w-[14px] h-[14px] rounded-full bg-amber-500 text-[8px] font-bold text-white flex items-center justify-center px-0.5 leading-none">
+              {badge > 9 ? "9+" : badge}
+            </span>
+          )}
         </span>
         <span
           className={cn(
@@ -80,7 +93,7 @@ function NavItem({ item, active }: { item: MobileTabNavItem; active: boolean }) 
   );
 }
 
-export function BottomNav() {
+export function BottomNav({ badges = {} }: { badges?: Record<string, number> }) {
   const pathname = usePathname();
   const isNewList = pathname.startsWith("/lists/new");
 
@@ -126,6 +139,7 @@ export function BottomNav() {
                   key={slot.href}
                   item={slot}
                   active={isTabActive(pathname, slot.href, isNewList)}
+                  badge={badges[slot.href]}
                 />
               );
             })}

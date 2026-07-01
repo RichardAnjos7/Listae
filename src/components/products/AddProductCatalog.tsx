@@ -22,9 +22,18 @@ type Props = {
   markets?: MarketOption[];
   action: (formData: FormData) => void | Promise<void>;
   autoOpen?: boolean;
+  submitLabel?: string;
+  imageStaging?: boolean;
 };
 
-export function AddProductCatalog({ categories, markets = [], action, autoOpen }: Props) {
+export function AddProductCatalog({
+  categories,
+  markets = [],
+  action,
+  autoOpen,
+  submitLabel = "Enviar para revisão",
+  imageStaging = true,
+}: Props) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -62,8 +71,9 @@ export function AddProductCatalog({ categories, markets = [], action, autoOpen }
               categories={categories}
               markets={markets}
               action={action}
-              submitLabel="Publicar no catálogo"
+              submitLabel={submitLabel}
               enableSuggestions
+              imageStaging={imageStaging}
             />
           </div>
         </div>

@@ -1,18 +1,23 @@
 import { getSessionUserId } from "@/lib/auth/session";
+import { isSuperDev } from "@/lib/auth/super-dev";
+import {
+  blobAccess,
+  isStagingPath,
+  productImageServePath,
+  stagingOwnerId,
+} from "@/lib/catalog/blob-images";
 import { get, put } from "@vercel/blob";
 import { NextResponse } from "next/server";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
-function blobAccess(): "public" | "private" {
-  const raw = process.env.BLOB_ACCESS?.trim().toLowerCase();
-  return raw === "public" ? "public" : "private";
-}
-
-function serveUrl(pathname: string, request: Request): string {
-  const base = new URL(request.url);
-  return `${base.origin}/api/catalog/product-image?p=${encodeURIComponent(pathname)}`;
+function canReadPath(pathname: string, userId: string, isAdmin: boolean): boolean {
+  if (pathname.startsWith("products/")) return true;
+  if (isStagingPath(pathname)) {
+    return isAdmin || stagingOwnerId(pathname) === userId;
+  }
+  return false;
 }
 
 export async function GET(request: Request) {
@@ -29,12 +34,17 @@ export async function GET(request: Request) {
   }
 
   const pathname = new URL(request.url).searchParams.get("p");
-  if (!pathname || !pathname.startsWith("products/")) {
+  if (!pathname || (!pathname.startsWith("products/") && !pathname.startsWith("staging/"))) {
     return NextResponse.json({ error: "Imagem inválida" }, { status: 400 });
   }
 
+  const isAdmin = await isSuperDev(userId);
+  if (!canReadPath(pathname, userId, isAdmin)) {
+    return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+  }
+
   try {
-    const result = await get(pathname, { access: "private" });
+    const result = await get(pathname, { access: blobAccess() });
     if (!result?.stream) {
       return NextResponse.json({ error: "Imagem não encontrada" }, { status: 404 });
     }
@@ -42,7 +52,9 @@ export async function GET(request: Request) {
     return new Response(result.stream, {
       headers: {
         "Content-Type": result.blob.contentType ?? "image/jpeg",
-        "Cache-Control": "public, max-age=86400, immutable",
+        "Cache-Control": pathname.startsWith("staging/")
+          ? "private, max-age=300"
+          : "public, max-age=86400, immutable",
       },
     });
   } catch (e) {
@@ -86,7 +98,10 @@ export async function POST(request: Request) {
   }
 
   const ext = type.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
-  const pathname = `products/${userId}/${Date.now()}.${ext}`;
+  const isStaging = new URL(request.url).searchParams.get("staging") === "1";
+  const pathname = isStaging
+    ? `staging/${userId}/${Date.now()}.${ext}`
+    : `products/${userId}/${Date.now()}.${ext}`;
   const access = blobAccess();
 
   try {
@@ -95,8 +110,9 @@ export async function POST(request: Request) {
       contentType: type,
     });
 
-    const url = access === "private" ? serveUrl(pathname, request) : blob.url;
-    return NextResponse.json({ url });
+    const url =
+      access === "private" || isStaging ? productImageServePath(pathname) : blob.url;
+    return NextResponse.json({ url, pathname });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Falha no upload";
     return NextResponse.json({ error: msg }, { status: 500 });

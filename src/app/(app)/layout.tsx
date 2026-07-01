@@ -2,6 +2,7 @@ import { AppBadgeSync } from "@/components/AppBadgeSync";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { ThemeToggleButton } from "@/components/layout/ThemeToggleButton";
+import { getPendingCatalogSubmissionCount } from "@/lib/actions/catalog-submissions";
 import { signOut } from "@/lib/actions/auth";
 import { getProfile } from "@/lib/actions/profile";
 import { getSessionUserId } from "@/lib/auth/session";
@@ -13,14 +14,22 @@ export default async function AppShellLayout({ children }: { children: React.Rea
   const hasDbEnv = Boolean(process.env.DATABASE_URL) && Boolean(process.env.AUTH_SECRET);
   const userId = hasDbEnv ? await getSessionUserId() : null;
   let alertBadge = 0;
+  let catalogPendingBadge = 0;
   let avatarUrl: string | null = null;
   if (userId && hasDbEnv) {
-    const [count, profile] = await Promise.all([
+    const [count, profile, catalogPending] = await Promise.all([
       getUnreadInboxCount(userId),
       getProfile(userId),
+      getPendingCatalogSubmissionCount(userId),
     ]);
     alertBadge = count;
+    catalogPendingBadge = catalogPending;
     avatarUrl = profile?.avatar_url ?? null;
+  }
+
+  const navBadges: Record<string, number> = {};
+  if (catalogPendingBadge > 0) {
+    navBadges["/products"] = catalogPendingBadge;
   }
 
   return (
@@ -85,7 +94,7 @@ export default async function AppShellLayout({ children }: { children: React.Rea
         )}
         {children}
       </main>
-      <BottomNav />
+      <BottomNav badges={navBadges} />
     </div>
   );
 }
