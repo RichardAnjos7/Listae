@@ -10,13 +10,21 @@ type CategoryOption = {
   icon?: string | null;
 };
 
+type MarketOption = {
+  id: string;
+  name: string;
+  city: string | null;
+  chain_name: string | null;
+};
+
 type Props = {
   categories: CategoryOption[];
+  markets?: MarketOption[];
   action: (formData: FormData) => void | Promise<void>;
   autoOpen?: boolean;
 };
 
-export function AddProductCatalog({ categories, action, autoOpen }: Props) {
+export function AddProductCatalog({ categories, markets = [], action, autoOpen }: Props) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -35,7 +43,7 @@ export function AddProductCatalog({ categories, action, autoOpen }: Props) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 px-3 pt-3 pb-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.75rem)] sm:p-3">
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 px-3 pt-3 pb-[calc(var(--app-nav-inset)+0.75rem)] sm:p-3">
           <div className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 space-y-3 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between gap-2">
               <h2 className="text-base font-semibold text-slate-900 dark:text-white">
@@ -52,6 +60,7 @@ export function AddProductCatalog({ categories, action, autoOpen }: Props) {
             </div>
             <CatalogProductForm
               categories={categories}
+              markets={markets}
               action={action}
               submitLabel="Publicar no catálogo"
               enableSuggestions

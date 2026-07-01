@@ -143,6 +143,15 @@ const HINT_RULES: HintRule[] = [
     unit: "un",
   },
   {
+    keywords: [
+      "macarrão instantâneo", "macarrao instantaneo", "lámen", "lamen", "miojo", "cup noodles",
+      "nissin", "maggi",
+    ],
+    categoryName: "Mercearia",
+    unit: "un",
+    packageAmount: "1",
+  },
+  {
     keywords: ["pilha", "lâmpada", "lampada", "vela", "isqueiro", "papel alumínio", "papel aluminio", "filme pvc"],
     categoryName: "Bazar",
     unit: "un",
@@ -157,9 +166,43 @@ function normalizeForMatch(text: string): string {
     .trim();
 }
 
+/** Extrai embalagem do nome: "Arroz 5kg", "Leite 1L", "500g", etc. */
+export function parsePackageFromName(name: string): { unit: string; packageAmount: string } | null {
+  const text = name.trim();
+  if (text.length < 2) return null;
+
+  const match =
+    text.match(/(\d+(?:[.,]\d+)?)\s*(kg|quilo|g|gr|gramas?|mg|ml|m[lL]|l|litro|litros|un|und|unid(?:ade)?s?)\b/i) ??
+    text.match(/(\d+(?:[.,]\d+)?)(kg|g|mg|ml|l|un)\b/i);
+
+  if (!match) return null;
+
+  const amount = match[1].replace(",", ".");
+  const rawUnit = match[2].toLowerCase();
+
+  let unit: string;
+  if (rawUnit === "kg" || rawUnit === "quilo") unit = "kg";
+  else if (rawUnit === "g" || rawUnit === "gr" || rawUnit.startsWith("gram")) unit = "g";
+  else if (rawUnit === "mg") unit = "mg";
+  else if (rawUnit === "ml") unit = "ml";
+  else if (rawUnit === "l" || rawUnit.startsWith("litro")) unit = "L";
+  else unit = "un";
+
+  if (!isValidProductUnit(unit)) return null;
+
+  const num = Number(amount);
+  if (!Number.isFinite(num) || num <= 0) return null;
+
+  const packageAmount = Number.isInteger(num) ? String(num) : String(num);
+
+  return { unit, packageAmount };
+}
+
 export function inferFromDictionary(name: string): ProductInference | null {
   const normalized = normalizeForMatch(name);
   if (normalized.length < 2) return null;
+
+  const fromName = parsePackageFromName(name);
 
   let best: { rule: HintRule; score: number } | null = null;
 
@@ -175,14 +218,26 @@ export function inferFromDictionary(name: string): ProductInference | null {
     }
   }
 
-  if (!best) return null;
+  if (!best && !fromName) return null;
 
-  const unit = isValidProductUnit(best.rule.unit) ? best.rule.unit : "un";
+  if (!best && fromName) {
+    return {
+      unit: fromName.unit,
+      categoryName: "",
+      packageAmount: fromName.packageAmount,
+      confidence: "medium",
+    };
+  }
+
+  const rule = best!.rule;
+  const unit = fromName?.unit ?? (isValidProductUnit(rule.unit) ? rule.unit : "un");
+  const packageAmount = fromName?.packageAmount ?? rule.packageAmount ?? "1";
+
   return {
     unit,
-    categoryName: best.rule.categoryName,
-    packageAmount: best.rule.packageAmount ?? "1",
-    confidence: best.score >= 80 ? "high" : "medium",
+    categoryName: rule.categoryName,
+    packageAmount,
+    confidence: fromName ? "high" : best!.score >= 80 ? "high" : "medium",
   };
 }
 

@@ -22,10 +22,30 @@ export default async function ProductsPage({
 
   const sql = getSql();
   const profile = await getProfile(userId);
+  const userCity = profile?.city?.trim() || null;
 
-  const products =
+  const marketsQuery = userCity
+    ? sql`
+        select distinct sm.id, sm.name, sm.city, rc.name as chain_name
+        from supermarkets sm
+        left join retail_chains rc on rc.id = sm.chain_id
+        where sm.user_id = ${userId}
+           or lower(trim(coalesce(sm.city, ''))) = lower(trim(${userCity}))
+        order by sm.name
+        limit 60
+      `
+    : sql`
+        select distinct sm.id, sm.name, sm.city, rc.name as chain_name
+        from supermarkets sm
+        left join retail_chains rc on rc.id = sm.chain_id
+        where sm.user_id = ${userId}
+        order by sm.name
+        limit 60
+      `;
+
+  const [products, categories, markets] = await Promise.all([
     query.length >= 1
-      ? await sql`
+      ? sql`
           select
             p.id, p.name, p.brand, p.unit, p.package_size, p.barcode, p.subcategory, p.image_url, p.is_global,
             p.category_id,
@@ -36,7 +56,7 @@ export default async function ProductsPage({
           left join categories c on c.id = p.category_id
           order by category_display_order asc, c.name asc, sc.rank_score desc, p.name asc
         `
-      : await sql`
+      : sql`
           select
             p.id, p.name, p.brand, p.unit, p.package_size, p.barcode, p.subcategory, p.image_url, p.is_global,
             p.category_id,
@@ -47,11 +67,10 @@ export default async function ProductsPage({
           where p.is_global = true
           order by category_display_order asc, c.name asc, p.name asc
           limit 120
-        `;
-
-  const categories = await sql`
-    select id, name, icon from categories order by display_order, name
-  `;
+        `,
+    sql`select id, name, icon from categories order by display_order, name`,
+    marketsQuery,
+  ]);
 
   const favRows = await sql`
     select product_id from favorite_products where user_id = ${userId}
@@ -62,6 +81,13 @@ export default async function ProductsPage({
     id: c.id as string,
     name: c.name as string,
     icon: c.icon as string | null,
+  }));
+
+  const marketOptions = markets.map((m) => ({
+    id: m.id as string,
+    name: m.name as string,
+    city: m.city as string | null,
+    chain_name: m.chain_name as string | null,
   }));
 
   const productRows = products.map((p) => ({
@@ -95,12 +121,16 @@ export default async function ProductsPage({
             Produtos agrupados por categoria. Ao cadastrar, unidade e categoria são sugeridas automaticamente.
           </p>
         </div>
-        <AddProductCatalog categories={categoryOptions} action={createProductAction} />
+        <AddProductCatalog
+          categories={categoryOptions}
+          markets={marketOptions}
+          action={createProductAction}
+        />
       </div>
 
       {added === "1" && (
         <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/80 dark:bg-emerald-950/40 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-200">
-          Produto adicionado ao catálogo.
+          Produto adicionado ao catálogo. Se informou preço, ele já aparece na comunidade da sua cidade.
         </div>
       )}
       {updated === "1" && (

@@ -36,7 +36,7 @@ export function LiveFeedModal({ open, city, items, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-60 flex items-end sm:items-center justify-center bg-black/40 px-3 pt-3 pb-[calc(3.5rem+env(safe-area-inset-bottom,0)+0.75rem)] sm:p-3"
+      className="fixed inset-0 z-60 flex items-end sm:items-center justify-center bg-black/40 px-3 pt-3 pb-[calc(var(--app-nav-inset)+0.75rem)] sm:p-3"
       onClick={onClose}
       role="dialog"
       aria-modal="true"

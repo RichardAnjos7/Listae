@@ -2,7 +2,7 @@
 
 import { requireSuperDev } from "@/lib/auth/super-dev";
 import { requireUserId } from "@/lib/auth/session";
-import { inferFromDictionary } from "@/lib/catalog/infer-product";
+import { inferFromDictionary, parsePackageFromName } from "@/lib/catalog/infer-product";
 import { parsePackageSize, parsePackageFromForm } from "@/lib/catalog/units";
 import { getSql } from "@/lib/db";
 import { revalidatePath } from "next/cache";
@@ -282,17 +282,28 @@ export async function suggestProductAttributes(name: string): Promise<ProductAtt
   if (catalogRows[0]) {
     const row = catalogRows[0];
     const parsed = parsePackageSize(row.package_size as string | null, row.unit as string);
+    const fromName = parsePackageFromName(q);
     return {
-      unit: parsed.unit,
+      unit: fromName?.unit ?? parsed.unit,
       categoryId: row.category_id as string | null,
       categoryName: row.category_name as string | null,
-      packageAmount: parsed.amount,
+      packageAmount: fromName?.packageAmount ?? parsed.amount,
       source: "catalog",
     };
   }
 
   const dict = inferFromDictionary(q);
-  if (!dict) return empty;
+  if (!dict) {
+    const fromNameOnly = parsePackageFromName(q);
+    if (!fromNameOnly) return empty;
+    return {
+      unit: fromNameOnly.unit,
+      categoryId: null,
+      categoryName: null,
+      packageAmount: fromNameOnly.packageAmount,
+      source: "dictionary",
+    };
+  }
 
   const categoryRows = await sql`
     select id, name from categories where name = ${dict.categoryName} limit 1
@@ -347,12 +358,38 @@ function readProductForm(formData: FormData) {
   return { name, brand, unit, packageSize, categoryId };
 }
 
+function readOptionalPriceFromForm(formData: FormData) {
+  const priceRaw = String(formData.get("unit_price") ?? "").trim().replace(",", ".");
+  const unitPrice = priceRaw ? Number(priceRaw) : null;
+  const supermarketId = String(formData.get("supermarket_id") ?? "").trim() || null;
+  const isPromotion = String(formData.get("is_promotion") ?? "") === "1";
+  const validUntilRaw = String(formData.get("valid_until") ?? "").trim();
+
+  if (unitPrice == null || !Number.isFinite(unitPrice) || unitPrice <= 0) {
+    return null;
+  }
+
+  if (isPromotion && !validUntilRaw) {
+    throw new Error("Informe até quando vale a promoção");
+  }
+
+  let validUntil: string | null = null;
+  if (isPromotion && validUntilRaw) {
+    const end = new Date(`${validUntilRaw}T23:59:59`);
+    if (Number.isNaN(end.getTime())) throw new Error("Data de promoção inválida");
+    validUntil = end.toISOString();
+  }
+
+  return { unitPrice, supermarketId, isPromotion, validUntil };
+}
+
 export async function createCatalogProduct(formData: FormData) {
   const userId = await requireUserId();
   const sql = getSql();
   const { name, brand, unit, packageSize, categoryId } = readProductForm(formData);
+  const optionalPrice = readOptionalPriceFromForm(formData);
 
-  await sql`
+  const inserted = await sql`
     insert into products (name, brand, unit, package_size, barcode, category_id, is_global, created_by)
     values (
       ${name},
@@ -364,9 +401,37 @@ export async function createCatalogProduct(formData: FormData) {
       true,
       ${userId}
     )
+    returning id
   `;
 
+  const productId = inserted[0]?.id as string;
+  if (!productId) throw new Error("Falha ao criar produto");
+
+  if (optionalPrice) {
+    const profileRows = await sql`
+      select city, neighborhood from profiles where id = ${userId} limit 1
+    `;
+    const city = (profileRows[0]?.city as string | null) ?? null;
+    const neighborhood = (profileRows[0]?.neighborhood as string | null) ?? null;
+
+    const { recordPriceObservation } = await import("@/lib/prices/record-observation");
+    await recordPriceObservation({
+      productId,
+      unitPrice: optionalPrice.unitPrice,
+      quantity: 1,
+      userId,
+      supermarketId: optionalPrice.supermarketId,
+      city,
+      neighborhood,
+      source: "manual",
+      isPromotion: optionalPrice.isPromotion,
+      validUntil: optionalPrice.validUntil,
+    });
+  }
+
   revalidatePath("/products");
+  revalidatePath("/prices");
+  revalidatePath("/");
 }
 
 export async function updateCatalogProduct(formData: FormData) {

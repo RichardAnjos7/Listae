@@ -11,6 +11,8 @@ export type RecordObservationInput = {
   city?: string | null;
   neighborhood?: string | null;
   source: "list_complete" | "manual" | "ocr";
+  isPromotion?: boolean;
+  validUntil?: string | null;
 };
 
 export async function recordPriceObservation(input: RecordObservationInput): Promise<string> {
@@ -26,6 +28,8 @@ export async function recordPriceObservation(input: RecordObservationInput): Pro
     city = null,
     neighborhood = null,
     source,
+    isPromotion = false,
+    validUntil = null,
   } = input;
 
   if (unitPrice <= 0) return "skipped";
@@ -42,7 +46,8 @@ export async function recordPriceObservation(input: RecordObservationInput): Pro
   await sql`
     insert into price_observations (
       product_id, store_location_id, supermarket_id, unit_price, quantity,
-      city, neighborhood, submitted_by, list_id, status, source
+      city, neighborhood, submitted_by, list_id, status, source,
+      is_promotion, valid_until
     )
     values (
       ${productId},
@@ -55,7 +60,9 @@ export async function recordPriceObservation(input: RecordObservationInput): Pro
       ${userId},
       ${listId},
       ${status},
-      ${source}
+      ${source},
+      ${isPromotion},
+      ${validUntil}
     )
   `;
 

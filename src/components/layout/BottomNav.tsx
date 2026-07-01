@@ -1,72 +1,137 @@
 "use client";
 
-import { History, LayoutGrid, ListIcon, ShoppingBasket } from "lucide-react";
-import { motion } from "framer-motion";
+import { CartIcon } from "@/components/icons/CartIcon";
+import { mobileTabNav, type MobileTabNavItem } from "@/config/navigation";
+import { cn } from "@/lib/utils";
+import { LayoutGroup, motion } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CartIcon } from "@/components/icons/CartIcon";
 
-const links = [
-  { href: "/", label: "Início", Icon: LayoutGrid },
-  { href: "/lists", label: "Listas", Icon: ListIcon },
-  { href: "/products", label: "Catálogo", Icon: ShoppingBasket },
-  { href: "/history", label: "Histórico", Icon: History },
-];
+const pillSpring = { type: "spring" as const, stiffness: 420, damping: 32, mass: 0.8 };
 
-export function BottomNav() {
-  const pathname = usePathname();
-  const left = links.slice(0, 2);
-  const right = links.slice(2);
+const NOTCH_MASK =
+  "radial-gradient(circle 40px at 50% 0, transparent 39px, #000 40px)";
 
-  const isNewList = pathname.startsWith("/lists/new");
+function isTabActive(pathname: string, href: string, isNewList: boolean) {
+  if (href === "/") return pathname === "/";
+  if (href === "/lists") return pathname.startsWith("/lists") && !isNewList;
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
-  const renderLink = ({ href, label, Icon }: (typeof links)[number]) => {
-    const active =
-      href === "/"
-        ? pathname === "/"
-        : pathname.startsWith(href) && !(href === "/lists" && isNewList);
-    return (
+function NewListFab() {
+  return (
+    <div className="relative flex justify-center">
+      <div
+        aria-hidden
+        className="absolute left-1/2 top-1/2 h-14 w-14 -translate-x-1/2 -translate-y-[calc(50%+10px)] rounded-full bg-primary/35 blur-2xl"
+      />
+      <motion.div
+        initial={false}
+        animate={{ y: -24 }}
+        whileTap={{ scale: 0.9, y: -24, rotate: 180 }}
+        transition={pillSpring}
+      >
+        <Link
+          href={mobileTabNav.fab.href}
+          aria-label={mobileTabNav.fab.label}
+          className="nav-fab relative inline-flex h-[3.25rem] w-[3.25rem] items-center justify-center rounded-full ring-2 ring-emerald-700/15 dark:ring-white/15 touch-manipulation"
+        >
+          <CartIcon className="h-7 w-7 drop-shadow-sm [stroke-width:2.2]" />
+        </Link>
+      </motion.div>
+    </div>
+  );
+}
+
+function NavItem({ item, active }: { item: MobileTabNavItem; active: boolean }) {
+  const { href, label, Icon } = item;
+
+  return (
+    <li>
       <Link
-        key={href}
         href={href}
-        className={`group relative flex flex-col items-center justify-center flex-1 h-full text-[10px] font-medium gap-0.5 transition-colors ${
-          active ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
-        }`}
+        className="relative flex flex-col items-center gap-1 rounded-2xl px-1 py-2.5 touch-manipulation select-none antialiased transition-colors duration-200"
       >
         {active && (
           <motion.span
-            layoutId="nav-pill"
-            aria-hidden
-            className="absolute inset-x-2 top-2 bottom-2 -z-10 rounded-2xl bg-emerald-600/10 dark:bg-emerald-400/15"
-            transition={{ type: "spring", stiffness: 460, damping: 34 }}
+            layoutId="navPill"
+            transition={pillSpring}
+            className="nav-pill absolute inset-x-1.5 inset-y-1 -z-0 rounded-[14px]"
           />
         )}
-        <Icon
-          className="h-5 w-5 transition-transform group-active:scale-90"
-          strokeWidth={active ? 2.25 : 1.75}
-        />
-        {label}
+        <span className="nav-item-icon relative z-10 inline-flex h-[22px] w-[22px] items-center justify-center" data-active={active}>
+          <Icon
+            className="h-[22px] w-[22px]"
+            strokeWidth={active ? 2.35 : 2.1}
+            absoluteStrokeWidth
+          />
+        </span>
+        <span
+          className={cn(
+            "nav-item-label relative z-10 text-[11px] leading-none",
+            active ? "font-semibold" : "font-medium"
+          )}
+          data-active={active}
+        >
+          {label}
+        </span>
       </Link>
-    );
-  };
+    </li>
+  );
+}
+
+export function BottomNav() {
+  const pathname = usePathname();
+  const isNewList = pathname.startsWith("/lists/new");
+
+  const slots: Array<MobileTabNavItem | { isFab: true }> = [
+    mobileTabNav.left[0],
+    mobileTabNav.left[1],
+    { isFab: true },
+    mobileTabNav.right[0],
+    mobileTabNav.right[1],
+  ];
 
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-50 flex justify-center px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom,0))] pointer-events-none">
-      <div className="pointer-events-auto flex items-center h-16 w-full max-w-md rounded-[28px] border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
-        {left.map(renderLink)}
-
-        <div className="flex-1 flex justify-center">
-          <Link
-            href="/lists/new"
-            aria-label="Nova lista"
-            className="flex items-center justify-center h-14 w-14 -mt-8 rounded-full bg-linear-to-br from-emerald-500 to-emerald-700 text-white shadow-lg shadow-emerald-600/40 ring-4 ring-white dark:ring-slate-900 hover:brightness-110 active:scale-95 transition"
-          >
-            <CartIcon className="h-7 w-7" />
-          </Link>
-        </div>
-
-        {right.map(renderLink)}
-      </div>
-    </nav>
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:hidden">
+      <nav aria-label="Navegação principal" className="pointer-events-auto relative w-full max-w-md">
+        <div
+          aria-hidden
+          className="nav-bar-surface absolute inset-0 rounded-[28px] backdrop-blur-3xl backdrop-saturate-150"
+          style={{
+            WebkitMaskImage: NOTCH_MASK,
+            maskImage: NOTCH_MASK,
+          }}
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent dark:via-white/15"
+          style={{
+            WebkitMaskImage: NOTCH_MASK,
+            maskImage: NOTCH_MASK,
+          }}
+        />
+        <LayoutGroup>
+          <ul className="relative grid grid-cols-5 items-end px-1.5 pb-0.5">
+            {slots.map((slot) => {
+              if ("isFab" in slot) {
+                return (
+                  <li key="fab" className="flex justify-center">
+                    <NewListFab />
+                  </li>
+                );
+              }
+              return (
+                <NavItem
+                  key={slot.href}
+                  item={slot}
+                  active={isTabActive(pathname, slot.href, isNewList)}
+                />
+              );
+            })}
+          </ul>
+        </LayoutGroup>
+      </nav>
+    </div>
   );
 }

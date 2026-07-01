@@ -153,7 +153,12 @@ export function CommunitySections({
                   </span>
                   {productLabel(item.product_name, item.brand)} — {item.store_name}
                 </span>
-                <span className="text-right font-semibold text-emerald-700 dark:text-emerald-400 tabular-nums">
+                <span className="text-right font-semibold text-emerald-700 dark:text-emerald-400 tabular-nums flex flex-col items-end gap-0.5">
+                  {item.is_promotion && (
+                    <span className="text-[9px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                      Promo
+                    </span>
+                  )}
                   {formatBRL(item.unit_price)}
                 </span>
               </li>

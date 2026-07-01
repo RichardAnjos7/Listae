@@ -22,7 +22,7 @@ export function PurchaseCompleteScreen({ summary, onDismiss }: Props) {
   const historyHref = `/history?completed=${summary.listId}`;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 px-3 pt-3 pb-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.75rem)] sm:p-3">
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/50 px-3 pt-3 pb-[calc(var(--app-nav-inset)+0.75rem)] sm:p-3">
       <div
         className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-900 shadow-xl overflow-hidden"
         role="dialog"
